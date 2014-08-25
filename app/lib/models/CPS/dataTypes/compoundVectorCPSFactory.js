@@ -16,11 +16,11 @@ define([
   , algebra
 ) {
     "use strict";
-    
+
     var ValueError = errors.Value
       , CPSAlgebraError = errors.CPSAlgebra
       ;
-    
+
     function CPSOperator() {
         algebra.Operator.apply(this, Array.prototype.slice.call(arguments));
     }
@@ -39,7 +39,7 @@ define([
             if(val instanceof CompoundVector || val instanceof CompoundReal
                     || val instanceof IntrinsicValue)
                 val = val.value;
-            
+
             // at this point val may be number or Vector
             if(!(val instanceof Vector) && typeof val !== 'number')
                 throw new ValueError('Expected an instanceof Vector or a '
@@ -55,7 +55,7 @@ define([
         var result = this._routine.apply(null, args);
         return result;
     }
-    
+
     function add(a, b) {
         if(!(a instanceof Vector))
             a = new Vector(a)
@@ -83,12 +83,26 @@ define([
     }
     function constructVector(a, b) {
         if(typeof a !== 'number' || typeof b !== 'number')
-            throw new ValueError('All arguments of the Vector constructior '
+            throw new ValueError('All arguments of the Vector constructor '
                 +'operator must be typeof number, but got: '
                 + typeof a + ' and ' + typeof b);
         return new Vector(a, b);
     }
-    
+
+    function constructVectorFromPolar(r, phi) {
+        if(typeof r !== 'number' || typeof phi !== 'number')
+            throw new ValueError('All arguments of the Vector.fromPolar '
+                +'operator must be typeof number, but got: '
+                + typeof r + ' and ' + typeof phi);
+        return Vector.fromPolar(r, phi);
+    }
+
+    var _toRad = Math.PI/180;
+    function deg2rad(deg){
+        // deg * Math.PI/180;
+        return deg * _toRad;
+    }
+
     var algebraEngine = new algebra.Engine(
         CompoundAlgebraValue
       , new CPSOperator('+',1, 1, 1, add)
@@ -97,10 +111,18 @@ define([
       , new CPSOperator('/',2, 1, 1, divide)
       , new CPSOperator('^',3, 1, 1, pow)
       // comma is the vector constructor operator
-      // it has highest precedence
       , new CPSOperator(',',4, 1, 1, constructVector)
+      // "polar" is used to construct a vector from polar arguments:
+      // magnitude and an angle in radians "polar 100, 0.7853"
+      , new CPSOperator('polar', 4, 0, 2, constructVectorFromPolar)
+      // use the deg operator to convert a number from degree to radians
+      // this has higher precedence than "polar" because it makes writing:
+      // "polar 100 45 deg" possible.
+      , new CPSOperator('deg', 5, 1, 0, deg2rad)
     );
-    
+
+
+
     return {
         defaultFactory: function(name, element, getCPSValueAPI) {
             var intrinsic = getCPSValueAPI(name + 'Intrinsic');
@@ -114,7 +136,7 @@ define([
             var invalidParamterMessage = false
             , postfixStack
             ;
-            
+
             try {
                 // this stack element stores the calculations that have to
                 // be done in an array of postfix/reverse polish notation
