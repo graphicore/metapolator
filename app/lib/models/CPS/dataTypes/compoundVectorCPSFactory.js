@@ -175,7 +175,12 @@ define([
             }
             setFactoryAPI(function(name, element, getCPSValueAPI) {
                 var intrinsic;
-                intrinsic = getCPSValueAPI(name + 'Intrinsic');
+                // FIXME: part of testing the removal the implicit
+                // intrinsic value (by simply setting it to zero)
+                // the 'name + Intrinsic' property will be used in
+                // the parameter definition explicitly
+                // If this is a good idea: refactor :-)
+                intrinsic = [0,0]// getCPSValueAPI(name + 'Intrinsic');
                 return new CompoundVector(
                     intrinsic,
                     getCPSValueAPI,
