@@ -33,7 +33,7 @@ define([
         for(;i<arguments.length;i++) {
             val = arguments[i];
             if(val instanceof CompoundAlgebraValue)
-                val = val.getValue(getCPSValueAPI)
+                val = val.getValue(getCPSValueAPI);
             // at this point val may be number, CompoundReal, Vector,
             // CompoundVector or IntrinsicValue
             if(val instanceof CompoundVector || val instanceof CompoundReal
@@ -42,8 +42,9 @@ define([
 
             // at this point val may be number or Vector
             if(!(val instanceof Vector) && typeof val !== 'number')
-                throw new ValueError('Expected an instanceof Vector or a '
-                                    + ' typeof number but got a: ' + val
+                throw new ValueError(this._literal + ': '
+                                    + 'Expected an instanceof Vector or a '
+                                    + 'typeof number but got a: ' + val
                                     + ' typeof: '+ typeof val);
             else if(typeof val === 'number' && !isFinite(val))
                 throw new ValueError('Value is a number but not finite '+ val);
@@ -54,31 +55,41 @@ define([
         }
         var result = this._routine.apply(null, args);
         return result;
-    }
+    };
 
     function add(a, b) {
+        if(typeof a === 'number' && typeof b === 'number')
+            return a + b;
         if(!(a instanceof Vector))
-            a = new Vector(a)
+            a = new Vector(a);
         return a['+'](b);
     }
     function subtract(a, b) {
+        if(typeof a === 'number' && typeof b === 'number')
+            return a - b;
         if(!(a instanceof Vector))
-            a = new Vector(a)
+            a = new Vector(a);
         return a['-'](b);
     }
     function multiply(a, b) {
+        if(typeof a === 'number' && typeof b === 'number')
+            return a * b;
         if(!(a instanceof Vector))
-            a = new Vector(a)
+            a = new Vector(a);
         return a['*'](b);
     }
-    function divide(a, b){
+    function divide(a, b) {
+        if(typeof a === 'number' && typeof b === 'number')
+            return a / b;
         if(!(a instanceof Vector))
-            a = new Vector(a)
+            a = new Vector(a);
         return a['/'](b);
     }
-    function pow(a, b){
+    function pow(a, b) {
+        if(typeof a === 'number' && typeof b === 'number')
+            return Math.pow(a, b);
         if(!a instanceof Vector)
-            a = new Vector(a)
+            a = new Vector(a);
         return a['**'](b);
     }
     function constructVector(a, b) {
@@ -103,6 +114,11 @@ define([
         return deg * _toRad;
     }
 
+    function printType(a){
+        console.log('debug typeof:', typeof a, 'string val: '+a);
+        return a;
+    }
+
     var algebraEngine = new algebra.Engine(
         CompoundAlgebraValue
       , new CPSOperator('+',1, 1, 1, add)
@@ -118,7 +134,9 @@ define([
       // use the deg operator to convert a number from degree to radians
       // this has higher precedence than "polar" because it makes writing:
       // "polar 100 45 deg" possible.
-      , new CPSOperator('deg', 5, 1, 0, deg2rad)
+      , new CPSOperator('deg', 5, 0, 1, deg2rad)
+
+      , new CPSOperator('_type', 100, 0, 1, printType)
     );
 
 
@@ -165,5 +183,5 @@ define([
                 );
             });
         }
-    }
+    };
 });
