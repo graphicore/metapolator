@@ -241,6 +241,12 @@ define([
         left = {
             onIntrinsic: point.l.on.vector['-'](zon)
         }
+        // Don't import these values, because they are dependent on their
+        // right side counterpart in the defaults.cps setup.
+        // left.onDir is defined as the inverse of right.onDir (+ deg 180)
+        // left.onLength is defined being equal to right.onLength
+        // left.onLength = left.onIntrinsic.magnitude()
+        // left.onDir = left.onIntrinsic.angle()
         if(point.l.in !== undefined) {
             left.inIntrinsic = point.l.in.vector['-'](zon)
                                                 ['-'](center.inIntrinsic)
@@ -270,6 +276,9 @@ define([
         right = {
             onIntrinsic: point.r.on.vector['-'](zon)
         }
+
+        right.onLength = right.onIntrinsic.magnitude()
+        right.onDir = right.onIntrinsic.angle()
         if(point.r.in !== undefined) {
             right.inIntrinsic = point.r.in.vector['-'](zon)
                                                  ['-'](center.inIntrinsic)
