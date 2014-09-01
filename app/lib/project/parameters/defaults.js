@@ -66,11 +66,18 @@ define([
       , new Rule(
             parseSelectorList.fromString('point>left, point>right', source.name)
           , parameterDictFromObject({
-                  on: 'onIntrinsic + parent:center:on'
+                  on: 'polar onLength onDir + parent:center:on'
                 , in: 'inIntrinsic + parent:center:on + parent:center:inIntrinsic + onIntrinsic'
                 , out: 'outIntrinsic + parent:center:on + parent:center:outIntrinsic + onIntrinsic'
                 , inDir: 'inDirIntrinsic + parent:center:inDir'
                 , outDir: 'outDirIntrinsic + parent:center:outDir'
+              })
+          , source
+        )
+      , new Rule(
+            parseSelectorList.fromString('point>left', source.name)
+          , parameterDictFromObject({
+                  onDir: 'deg 180 + parent:right:onDir;'
               })
           , source
         )
