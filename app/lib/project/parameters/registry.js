@@ -69,5 +69,16 @@ define([
                                                 + 'outgoing Control Point.'
     });
 
+    parameterRegistry.register('onLength', {
+                type: 'compoundReal'
+              , description: 'The distance from center point to left or '
+                            + 'right on curve point'
+    })
+    parameterRegistry.register('onDir', {
+                type: 'compoundReal'
+              , description: 'The direction in radians from center point '
+                            + 'to left or right on curve point'
+    })
+
     return parameterRegistry;
 });
