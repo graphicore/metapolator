@@ -44,6 +44,17 @@ define([
 
     rules.push(
         new Rule(
+            parseSelectorList.fromString('*', source.name)
+          , parameterDictFromObject({
+                  on: 'onIntrinsic'
+                , in: 'inIntrinsic'
+                , out: 'outIntrinsic'
+                , inDir: 'inDirIntrinsic'
+                , outDir: 'outDirIntrinsic'
+              })
+          , source
+      )
+      , new Rule(
             parseSelectorList.fromString('point>center', source.name)
           , parameterDictFromObject({
                   on: 'onIntrinsic + parent:skeleton:on'

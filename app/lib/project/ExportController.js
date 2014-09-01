@@ -1,9 +1,11 @@
 define([
     'metapolator/errors'
   , 'metapolator/math/hobby'
+  , 'metapolator/math/Vector'
 ], function(
     errors
   , hobby
+  , Vector
 ) {
     "use strict";
 
@@ -63,16 +65,16 @@ define([
 
     function getControlsFromStyle(p0, p1, terminal) {
         var on0 = p0.get('on').value
-          , outDir = p0.get(terminal === 'start' ? 'inDir' : 'outDir').value
+          , outDirAngle = p0.get(terminal === 'start' ? 'inDir' : 'outDir').value
           , outTension = p0.get(terminal === 'start' ? 'inTension' :'outTension')
           , inTension = p1.get(terminal === 'end' ? 'outTension' : 'inTension')
-          , inDir = p1.get(terminal === 'end' ? 'outDir' :'inDir').value
+          , inDirAngle = p1.get(terminal === 'end' ? 'outDir' :'inDir').value
           , on1 = p1.get('on').value
+          , outDir = Vector.fromPolar(1, outDirAngle)
+          , inDir = Vector.fromPolar(1, inDirAngle)
           ;
 
-        if(outTension && inTension
-                            && outDir.magnitude()
-                            && inDir.magnitude())
+        if(outTension && inTension)
             return hobby.hobby2cubic(on0, outDir, outTension,
                                             inTension, inDir, on1);
         // fallback to control points is always possible. Although,
