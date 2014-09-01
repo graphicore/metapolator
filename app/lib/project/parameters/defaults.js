@@ -77,7 +77,8 @@ define([
       , new Rule(
             parseSelectorList.fromString('point>left', source.name)
           , parameterDictFromObject({
-                  onDir: 'deg 180 + parent:right:onDir;'
+                  onDir: 'deg 180 + parent:right:onDir'
+                , onLength: 'parent:right:onLength'
               })
           , source
         )
