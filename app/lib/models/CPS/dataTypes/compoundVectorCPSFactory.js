@@ -6,6 +6,7 @@ define([
   , './IntrinsicValue'
   , './CompoundAlgebraValue'
   , './algebra'
+  , 'ufojs/tools/misc/transform'
 ], function(
     errors
   , CompoundVector
@@ -14,6 +15,7 @@ define([
   , IntrinsicValue
   , CompoundAlgebraValue
   , algebra
+  , transform
 ) {
     "use strict";
 
@@ -119,8 +121,14 @@ define([
         return a;
     }
 
+    function scale(x, y, vector) {
+        var scale = transform.Scale(x, y);
+        return new Vector.fromArray(scale.transformPoint(vector));
+    }
+
     var algebraEngine = new algebra.Engine(
         CompoundAlgebraValue
+      , new CPSOperator('scale', 0, 0, 3, scale)
       , new CPSOperator('+',1, 1, 1, add)
       , new CPSOperator('-',1, 1, 1, subtract)
       , new CPSOperator('*',2, 1, 1, multiply)
