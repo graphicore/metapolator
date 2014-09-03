@@ -128,6 +128,7 @@ define([
 
     var algebraEngine = new algebra.Engine(
         CompoundAlgebraValue
+      , new CPSOperator('index', 0, 0, 2, function(index, item){ return item[index]; })
       , new CPSOperator('scale', 0, 0, 3, scale)
       , new CPSOperator('+',1, 1, 1, add)
       , new CPSOperator('-',1, 1, 1, subtract)
