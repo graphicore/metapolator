@@ -59,10 +59,21 @@ define([
         return deg * _toRad;
     }
 
+    function subtract(a, b) {
+        if(typeof a === 'number' && typeof b === 'number')
+            return a - b;
+        if(!(a instanceof Vector))
+            a = new Vector(a);
+        return a['-'](b);
+    }
+
     var algebraEngine = new algebra.Engine(
         CompoundAlgebraValue
+      , new CPSOperator('getrad', 1, 0, 1, function(a) {
+            return a.rad;
+        })
       , new CPSOperator('+',1, 1, 1, function(a, b){ return a+b; })
-      , new CPSOperator('-',1, 1, 1, function(a, b){ return a-b; })
+      , new CPSOperator('-',1, 1, 1, subtract)
       , new CPSOperator('*',2, 1, 1, function(a, b){ return a*b; })
       , new CPSOperator('/',2, 1, 1, function(a, b){
           if(b === 0)
