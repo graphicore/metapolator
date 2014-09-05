@@ -45,6 +45,7 @@ requirejs([
           , 'dev-playground-cps': 'commands/playground/cps'
           , 'dev-playground-cps-selectors': 'commands/playground/cps-selectors'
           , 'dev-playground-cps-algebra': 'commands/playground/cps-algebra'
+          , 'dev-playground-cps-formulae': 'commands/playground/cps-formulae'
         }
       , commandList = Object.keys(commands)
       , help = [
