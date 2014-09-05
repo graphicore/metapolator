@@ -20,5 +20,9 @@ define([
     var _p = NameToken.prototype = Object.create(Parent.prototype);
     _p.constructor = NameToken;
 
+    _p.getValue = function() {
+        return this.literal;
+    };
+
     return NameToken;
-}
+});
