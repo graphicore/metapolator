@@ -18,5 +18,9 @@ define([
     var _p = StringToken.prototype = Object.create(Parent.prototype);
     _p.constructor = StringToken;
 
+    _p.getValue = function() {
+        return this.literal;
+    };
+
     return StringToken;
-}
+});
