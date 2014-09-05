@@ -23,19 +23,19 @@ define([
         };
 
         Object.defineProperty(this, 'opening', {
-            value: '(['.indexOf(this.literal) !== -1;
+            value: '(['.indexOf(this.literal) !== -1
           , enumerable: true
-        })
+        });
 
         Object.defineProperty(this, 'closing', {
             value: !this.opening
           , enumerable: true
-        })
+        });
 
         Object.defineProperty(this, 'counterpart', {
-            value: counterparts[this.literal];
+            value: counterparts[this.literal]
           , enumerable: true
-        })
+        });
     }
 
     var _p = BracketToken.prototype = Object.create(Parent.prototype);
@@ -43,8 +43,8 @@ define([
 
     _p.matches = function(val) {
         return val === this.counterpart;
-    }
+    };
 
 
     return BracketToken;
-}
+});
