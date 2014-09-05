@@ -13,15 +13,16 @@ define([
      * This is the base for formulae/parsing/OperatorToken and formulae/parsing/_ValueToken
      */
     function _Token(literal, preConsumes, postConsumes) {
+        /*jshint validthis:true */
         this._literal = literal;
         this._setConsumption(preConsumes, postConsumes);
     }
 
     var _p = _Token.prototype;
     _p.constructor = _Token;
-   _p.toString = function() {
-        return ['<', _p.constructor.name, ': ', this.literal, '>'].join('');
-    }
+    _p.toString = function() {
+        return ['<', this.constructor.name, ': ', this.literal, '>'].join('');
+    };
 
     // Currently every _Token is expected to leave exactly one
     // value on the stack after execution, this will probably not
@@ -29,7 +30,7 @@ define([
     Object.defineProperty(_p, '_ejects', {
         value: 1
       , writable: false
-    })
+    });
 
     _p._setConsumption = function(preConsumes, postConsumes){
         if(typeof preConsumes !== 'number')
@@ -40,7 +41,7 @@ define([
             throw new CPSFormulaError('postConsumes must be a number, but is "'
                                 + postConsumes +'" typeof: '+ typeof postConsumes);
         this._postConsumes = postConsumes;
-    }
+    };
 
     /**
      * Return a child object which has `this` as prototype. The child
@@ -62,17 +63,17 @@ define([
         var child = Object.create(this);
         child._setConsumption(preConsumes, postConsumes);
         return child;
-    }
+    };
 
     Object.defineProperty(_p, 'literal', {
         get: function(){ return this._literal; }
-    })
+    });
     Object.defineProperty(_p, 'preConsumes', {
         get: function(){ return this._preConsumes;}
-    })
+    });
     Object.defineProperty(_p, 'postConsumes', {
         get: function(){ return this._postConsumes;}
-    })
+    });
 
      Object.defineProperty(_p, 'consumes', {
         get: function() {
@@ -86,11 +87,11 @@ define([
                 );
             return this.preConsumes + this.postConsumes;
         }
-    })
+    });
 
     Object.defineProperty(_p, 'ejects', {
         get: function(){ return this._ejects; }
-    })
+    });
 
-    return _Element;
-}
+    return _Token;
+});
