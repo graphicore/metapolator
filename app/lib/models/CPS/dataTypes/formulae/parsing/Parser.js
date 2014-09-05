@@ -21,7 +21,9 @@ define([
 ) {
     "use strict";
 
-    var CPSFormulaError = errors.CPSFormula;
+    var CPSFormulaError = errors.CPSFormula
+      , KeyError = errors.Key
+      ;
 
     function Parser(/* operators */) {
         this._operators = this._createOperatorsDict(
@@ -31,14 +33,18 @@ define([
 
         this._operatorsByLength = this._createLengthLookup(
                                                         this._operators);
+
+        this._bracketOperators = {};
     }
 
-    var _p = Parser.prototype,
-        // Test if a string starts like a number:
-        // this omit the notation of a sign (especially -) because negation
-        // will be handled by an operator
-        // R_number.exec(string) !== null
-      , R_number = /^(((\d+(\.)?)|(\d*\.\d+))([eE][+-]?\d+)?)/
+    var _p = Parser.prototype
+        /**
+         * Test if a string starts like a number:
+         * this omit the notation of a sign (especially -) because negation
+         * will be handled by an operator
+         * R_number.exec(string) !== null
+         */
+      , R_number = /^(((\d*\.\d+)|(\d+(\.)?))([eE][+\-]?\d+)?)/
         //  Test if a string starts like a name
       , R_name = /^[0-9A-Za-z_]+/
       ;
@@ -59,7 +65,7 @@ define([
             result[operators[i].literal] = operators[i];
         }
         return result;
-    }
+    };
 
     /**
      * Creates an array like so:
@@ -89,7 +95,7 @@ define([
         // highest precedence first
         ordered.reverse();
         return ordered.map(function(precedence){ return temp[precedence]; });
-    }
+    };
 
     /**
      * returns an object with the keys "splitting" and "notSplitting"
@@ -131,7 +137,7 @@ define([
                 : temp.notSplitting
                 ;
             if(_temp[k.length] === undefined)
-                _temp[k.length] = {}
+                _temp[k.length] = {};
             _temp[k.length][k] = operators[k];
         }
 
@@ -145,7 +151,24 @@ define([
                               // return the operator dicts
                               .map(_get, temp[k]);
         return result;
-    }
+    };
+
+
+    _p.setBracketOperator = function(bracketLiteral, operatorLiteral) {
+        if(!(operatorLiteral in this._operators))
+            throw new KeyError('No operator found for literal: '
+                                                        + operatorLiteral);
+
+        this._bracketOperators[bracketLiteral] = operatorLiteral;
+    };
+
+    _p.getBracketOperator = function(bracketLiteral) {
+        if(bracketLiteral in this._bracketOperators)
+            return this._operators[this._bracketOperators[bracketLiteral]];
+
+        throw new KeyError('No bracket operator found for literal: '
+                                                        + bracketLiteral);
+    };
 
 
     /**
@@ -156,7 +179,7 @@ define([
         var result = []
           , item
           ;
-        while(item = tokens.shift()) {
+        while(!!(item = tokens.shift())) {
             if(item instanceof Array)
                 Array.prototype.unshift.apply(tokens, item);
             else
@@ -188,7 +211,7 @@ define([
             k = null;
             for(k in operators[i])
                 break;
-            if(k === null);
+            if(k === null)
                 continue;
             // cut out the right length from string
             search = string.substr(index, k.length);
@@ -203,17 +226,17 @@ define([
      * Test for all NOT splitting operators, longest first.
      */
     _p._testNotSplittingOperators = function(string, index) {
-        return this._testOperators(this._operatorsByLength.notSplitting
-                                                        , string, index)
-    }
+        return _testOperators(this._operatorsByLength.notSplitting
+                                                        , string, index);
+    };
 
     /**
      * Test for all splitting operators, longest first.
      */
     _p._testSplittingOperators = function(string, index) {
-        return this._testOperators(this._operatorsByLength.splitting
-                                                        , string, index)
-    }
+        return _testOperators(this._operatorsByLength.splitting
+                                                        , string, index);
+    };
 
 
     /**
@@ -274,12 +297,14 @@ define([
      * - names
      */
     _p.tokenize = function(string) {
-        var i=0, j, tokenEnd, value
+        var i=0, j, tokenEnd
           , tokens = []
           , reResult
+          , splitExpected
+          , foundOperator
           ;
         while(i<string.length) {
-            if(' \n\r\t'.indexOf(string[i]) !== -1 && value.length) {
+            if(' \n\r\t'.indexOf(string[i]) !== -1) {
                 // stuff that splits but is not reported (whitespace)
                 i++;
                 splitExpected = false; // a splitting token was found
@@ -288,7 +313,7 @@ define([
 
             // brackets are splitting
             if('()[]'.indexOf(string[i]) !== -1) {
-                tokens.push(new BracketToken = string[i]);
+                tokens.push(new BracketToken(string[i]));
                 i++;
                 splitExpected = false; // a splitting token was found
                 continue;
@@ -300,7 +325,7 @@ define([
                 if(tokenEnd === -1)
                     throw new CPSFormulaError('A closing double quote is '
                         +' missing for an opening string literal: "');
-                tokens.push(new StringToken(string.substring(i+1, tokenEnd));
+                tokens.push(new StringToken(string.substring(i+1, tokenEnd)));
                 i = tokenEnd+1;
                 splitExpected = false; // a splitting token was found
                 continue;
@@ -313,16 +338,16 @@ define([
                     throw new CPSFormulaError('A closing double quote is '
                         +' missing for an opening selector literal S" ...in: '
                         + string.substr(i));
-                tokens.push(new SelectorToken(string.substring(i+2, tokenEnd));
+                tokens.push(new SelectorToken(string.substring(i+2, tokenEnd)));
                 i = tokenEnd+1;
                 splitExpected = false; // a splitting token was found
                 continue;
             }
 
             // test for all splitting operators, length first
-            if(foundOperator = this._testSplittingOperators(string, i)) {
+            if(!!(foundOperator = this._testSplittingOperators(string, i))) {
                 tokens.push(foundOperator);
-                i += operator.literal.length;
+                i += foundOperator.literal.length;
                 splitExpected = false; // a splitting token was found
                 continue;
             }
@@ -344,9 +369,9 @@ define([
             splitExpected = true;
 
             // test for all NOT splitting operators, length first
-            if(foundOperator = this._testNotSplittingOperators(string, i)) {
+            if(!!(foundOperator = this._testNotSplittingOperators(string, i))) {
                 tokens.push(foundOperator);
-                i += operator.literal.length;
+                i += foundOperator.literal.length;
                 continue;
             }
 
@@ -354,30 +379,30 @@ define([
             // the string must be truncated to the current index
             // because RegEx.exec has no offset parameter like indexOf
             string = string.substr(i);
-            i=0
+            i=0;
 
             // number literals are not splitting
             // when we find a number literal that is not followed by a
             // split, it is still possible that it is a valid name like 1abc
             if((reResult = R_number.exec(string)) !== null) {
-                tokens.push(new NumberToken(parseFloat(reResult[0])))
-                i += reResult[0].length
+                tokens.push(new NumberToken(reResult[0]));
+                i += reResult[0].length;
                 continue;
             }
 
             // name literals are not splitting
             if((reResult = R_name.exec(string)) !== null) {
-                tokens.push(new NameToken(parseFloat(reResult[0])))
+                tokens.push(new NameToken(reResult[0]));
                 i += reResult[0].length;
                 continue;
             }
 
             // not recognized as token!
             throw new CPSFormulaError('Can\'t find the next token in the '
-                                    + 'string: ' + string)
+                                    + 'string: ' + string);
         }
         return tokens;
-    }
+    };
 
     _p._resolveBrackets = function(tokens) {
         var i = 0
@@ -387,7 +412,7 @@ define([
           ;
         for(;i<tokens.length;i++) {
             if(!(tokens[i] instanceof BracketToken)) {
-                if(openStack.length == 0)
+                if(openStack.length === 0)
                     // record this token, it is not inside of any brackets
                     result.push(tokens[i]);
             }
@@ -402,7 +427,7 @@ define([
                         || !openStack[openStack.length-1].matches(tokens[i].literal))
                     throw new CPSFormulaError('A closing bracket appeared '
                         + '"'+ tokens[i].literal +'" but a matching opening '
-                        + ' bracket is missing before.')
+                        + ' bracket is missing before.');
                 // the closing bracket matches
                 else if(openStack.length === 1)
                     // this closes the current outermost bracket
@@ -414,11 +439,11 @@ define([
                         // consume the content of the [] stack and uses
                         // its value as a key to read from in the previous
                         // value like: myValue["myKey"]
-                        result.push(this.getBracketOperator(openStack[0].literal))
+                        result.push(this.getBracketOperator(openStack[0].literal));
                     }
                     catch(error) {
                         if(!(error instanceof KeyError))
-                            throw
+                            throw error;
                         // else: pass. No operator was registered for this
                         // kind of bracket.
                     }
@@ -438,13 +463,13 @@ define([
                     + openStack.map(function(item){ return item.literal; })
                                .join(', '));
         return result;
-    }
+    };
 
 
     /**
      * Take the tokens where the calculations are in a infix notation and
      * return postfix or Reverse Polish notation:
-     * this means we got from 2 + 3 to 2 3 +. The operator follows all
+     * This means we go from 2 + 3 to 2 3 +. The operator follows all
      * of its operand. This is easy to calculate at the end, and we get
      * rid of the Parenthesis.
      *
@@ -455,21 +480,21 @@ define([
      * The algorithm uses one recursive call to eliminate parentheses
      * and multiple passes to solve all operators in order of precedence.
      */
-    _p.infixToPostfix = function infixToPostfix(tokens) {
+    _p.infixToPostfix = function infixToPostfix(tokensArg) {
         var operators = this._operatorsByPrecedence
-          , i
+          , tokens
           , j=0
+          , i
           , k
           , startPre
           , startPost
-          , endPost
-          , operation
-          , tokens
           , preConsumes
           , postConsumes
+          , endPost
+          , operation
           ;
         // find brackets and call this method recursively
-        tokens = this._resolveBrackets(tokens);
+        tokens = this._resolveBrackets(tokensArg);
 
         // convert all operators to postfix notation
         // operator precedence defines the order of the conversion
@@ -486,10 +511,6 @@ define([
                 // only apply operators with the correct precedence
                 if(!(tokens[i].literal in operators[j]))
                     continue;
-                (tokens[i].preConsumes === +Infinity
-                    ? i
-                    : tokens[i].preConsumes
-                )
 
                 // If preConsumes is Infinity, the operator consumes
                 // anything that is on the stack before its position.
@@ -531,7 +552,7 @@ define([
                                     && !(operation[k] instanceof Array))
                         throw new CPSFormulaError('Malformed stack at a "'
                             + tokens[i].literal+'" operator, which consumes '
-                            + (operation[k] instanceof Operator
+                            + (operation[k] instanceof OperatorToken
                                 ? 'another operator: "' + operation[k].literal + '"'
                                 : 'something that is not a ValueToken: "'
                                     + operation[k] + '" typeof: '
@@ -541,7 +562,7 @@ define([
                 if(tokens[i].preConsumes === Infinity
                                 || tokens[i].postConsumes === Infinity)
                     operation.push(
-                        new tokens[i].fixedConsumptionFactory(
+                        tokens[i].fixedConsumptionFactory(
                                             preConsumes, postConsumes));
                 else
                     operation.push(tokens[i]);
@@ -554,13 +575,13 @@ define([
             }
         }
         return _flatten(tokens);
-    }
+    };
 
-    _p.getExecuteableStack = function(string) {
+    _p.parse = function(string) {
         var tokens = this.tokenize(string);
         tokens = this.infixToPostfix(tokens);
         return new Stack(tokens);
-    }
+    };
 
     return Parser;
-}
+});
