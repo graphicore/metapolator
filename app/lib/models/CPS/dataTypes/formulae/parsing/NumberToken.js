@@ -16,10 +16,15 @@ define([
      */
     function NumberToken(literal) {
         Parent.call(this, literal, 0, 0);
+        this._value = parseFloat(this.literal);
     }
 
     var _p = NumberToken.prototype = Object.create(Parent.prototype);
     _p.constructor = NumberToken;
 
+    _p.getValue = function() {
+        return this._value;
+    };
+
     return NumberToken;
-}
+});
