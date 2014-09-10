@@ -2,15 +2,29 @@ define([
     'metapolator/errors'
   , './parsing/Parser'
   , './parsing/OperatorToken'
+  , './parsing/NameToken'
+  , 'metapolator/models/CPS/elements/SelectorList'
+  , 'metapolator/models/MOM/_Node'
+  , 'metapolator/models/CPS/cpsGetters'
+  , 'ufojs/tools/misc/transform'
+  , 'metapolator/math/Vector'
+  , Vector
 ], function(
     errors
   , Parser
   , Operator
+  , NameToken
+  , SelectorList
+  , _MOMNode
+  , cpsGetters
+  , transform
+  , Vector
 ) {
     "use strict";
 
     var ValueError = errors.Value
       , CPSFormulaError = errors.CPSFormula
+      , Transformation = transform.Transformation
       ;
 
     var _i_=0;
@@ -26,6 +40,8 @@ define([
         return '__result ' + ( _i_++ ) + '__';
     }
 
+   var _toRad = Math.PI/180;
+
     var engine = new Parser(
         // /**
         //  * Returns the host MOM Element, should be executed before
@@ -35,9 +51,17 @@ define([
         //  */
         // new Operator('this', false, Infinity, 0, 0, stub)
         /**
-         *  returns an Array
+         * returns an Array of everything that is on the current stack
+         *
+         * May become useful in the future, but for now it's more on the
+         * experimentation side. Getters should already work on arrays, so
+         * it may be a way to store values in an @dictionary parameter and
+         * index numbers.
          */
-        new Operator('list', false, -Infinity, 0, Infinity, stub)
+        new Operator('List', false, -Infinity, 0, Infinity, function(/*args, ...*/) {
+            // the first args is the 'get' interface, we don't return it.
+            return Array.protoype.slice(arguments, 1);
+        })
         /**
          * Returns a generic Value, could be virtually anything
          *
@@ -50,7 +74,31 @@ define([
          * item['key'] or item.get('key'), depending of the nature
          * of item and the details of the implementation
          */
-      , new Operator('__get__', false, Infinity, 1, 1, stub)
+      , new Operator('__get__', false, Infinity, 1, 1, [
+            ['*getAPI*', NameToken, 'String', function(getApi, name, key) {
+                var item = getApi(name.getValue());
+                return cpsGetters.generic(item, key);
+            }]
+          , ['*getAPI*', NameToken, NameToken, function(getAPI, name1, name2) {
+                var item = getAPI(name1.getValue())
+                  , key = getAPI(name2.getValue())
+                  ;
+                return cpsGetters.generic(item, key);
+            }]
+            // value: this['parent'][S"point.top"]
+          , [_MOMNode, SelectorList, function(node, selector) {
+                var result = node.query(selector);
+                if(!result)
+                    throw new KeyError('Not found: an element for '
+                                        + SelectorList + ' '
+                                        + 'in ' + node.particulars
+                                    );
+                return result;
+            }]
+          , ['*anything*', ['number', 'string'], function(item, key) {
+                return cpsGetters.generic(item, key);
+            }]
+        ])
         /**
          * Returns a generic Value, could be virtually anything
          * similar to __get__
@@ -64,7 +112,23 @@ define([
          * var key = name.getValue()
          * return item[key]
          */
-      , new Operator('.', true, Infinity, 1, 1, stub)
+      , new Operator('.', true, Infinity, 1, 1, [
+            ['*getAPI*', NameToken, NameToken, function(getAPI, name, key) {
+                var item = getAPI(name.getValue());
+                return cpsGetters.generic(item, key.getValue());
+            }]
+          , ['*getAPI*', SelectorList, NameToken, function(getAPI, selector, key) {
+                // SelectorList selects from global scope, aka multivers
+                var item = getAPI('this').multivers.query(selector);
+                if(!item)
+                    throw new KeyError('Not found: an element for '
+                                                        + SelectorList);
+                return cpsGetters.generic(item, key.getValue());
+            }]
+          , ['*anything*', NameToken, function(item, key) {
+                return cpsGetters.generic(item, key.getValue());
+            }]
+        ])
         /**
          * When a value is negated using the minus sign, this operator is
          * inserted instead of the minus sign. It can also be used directly.
@@ -79,45 +143,84 @@ define([
          * name * - 5 => name * negate name
          *
          */
-      , new Operator('negate', false, 6, 0, 1, stub)
-        /**
-         * add
-         */
-      , new Operator('+', true, 1, 1, 1, stub)
+      , new Operator('negate', false, 6, 0, 1, [
+            ['number', function(a){ return -a; }]
+          , [Vector, function(a){ return a.negate();}]
+          , [Transformation, function(transformation){ return transformation.inverse();}]
+        ])
+          /**
+           * add
+           */
+      , new Operator('+', true, 1, 1, 1, [
+            ['number' , 'number', function(a, b){ return a + b; }]
+          , ['string' , 'string', function(a, b){ return a + b; }]
+          , [Array , Array, function(a, b){ return a.concat(b); }]
+          , [Vector, Vector, function(a, b){ return a['+'](b);}]
+          , [Vector, 'number', function(a, b){ return a['+'](b);}]
+        ])
         /**
          * subtract
          */
-      , new Operator('-', true, 1, 1, 1, stub)
+      , new Operator('-', true, 1, 1, 1, [
+            ['number' , 'number', function(a, b){ return a - b; }]
+          , [Vector, Vector, function(a, b){ return a['-'](b);}]
+          , [Vector, 'number', function(a, b){ return a['-'](b);}]
+        ])
         /**
          * multiply
          */
-      , new Operator('*', true, 2, 1, 1, stub)
+      , new Operator('*', true, 2, 1, 1, [
+           ['number' , 'number', function(a, b){ return a * b; }]
+         , [Vector, Vector, function(a, b){ return a['*'](b);}]
+         , [Vector, 'number', function(a, b){ return a['*'](b);}]
+         , [Transformation, Vector, function(tarnsformation, vector) {
+                 return Vector.fromArray(tarnsformation.transformPoint(vector));
+           }]
+         , [Transformation, Transformation, function(t1, t2) {return t1.transform(t2);}]
+        ])
         /**
          * divide
          */
-      , new Operator('/', true, 2, 1, 1, stub)
+      , new Operator('/', true, 2, 1, 1, [
+            ['number' , 'number', function(a, b){ return a / b; }]
+          , [Vector, Vector, function(a, b){ return a['/'](b);}]
+          , [Vector, 'number', function(a, b){ return a['/'](b);}]
+        ])
         /**
          * pow
          */
-      , new Operator('^', true, 3, 1, 1, stub)
+      , new Operator('^', true, 3, 1, 1, [
+            ['number' , 'number', function(a, b){ return Math.pow(a, b); }]
+          , [Vector, Vector, function(a, b){ return a['**'](b);}]
+          , [Vector, 'number', function(a, b){ return a['**'](b);}]
+        ])
         /**
          * vector constructor operator
-         * Creates a vector from cartesian coordinates
+         * Creates a vector from Cartesian coordinates
          * Consumes two numbers returns a Vector
          */
-      , new Operator('vector', false, 4, 0, 2, stub)
+      , new Operator('Vector', false, 4, 0, 2, [
+            ['number' , 'number', function(a, b){ return new Vector(a, b); }]
+        ])
         /**
          * vector constructor operator
          * Creates a vector from polar coordinates => magnitude angle in radians
          * Consumes two numbers returns a Vector
          */
-      , new Operator('polar', false, 4, 0, 2, stub)
+      , new Operator('Polar', false, 4, 0, 2, [
+            ['number' , 'number', function(a, b){ return Vector.fromPolar(a, b); }]
+        ])
         /**
          * Convert a number from degree to radians
          * This has higher precedence than "polar" because it makes writing:
          * "polar 100 deg 45" possible.
          */
-      , new Operator('deg', false, 5, 0, 1, stub)
+      , new Operator('deg', false, 5, 0, 1, [
+            ['number', function(a) {
+                // deg * Math.PI/180;
+                return a * _toRad;
+            }]
+        ])
         /**
          * Print information about the input value to console.log
          * and return the value again.
@@ -125,22 +228,42 @@ define([
          */
       , new Operator('_print', false, Infinity, 0, 1, stub)
         /**
-         * Specify and apply an affine transformation scaling on a vector
-         * Returns a new vector.
-         * usage: scale xval yval <vector>
-         * where xval and yval are numbers
-         *
-         * TODO: affine transformations could be values similar to vectors,
-         * at least the + operator would make totally sense. Keep this in
-         * mind if applying the same transformations over and over becomes
-         * cumbersome. This would make it possible to store a transformation
-         * itself in an @dictionary for example
+         * Constructor for a scaling transformation matrix
          */
-      , new Operator('scale', false, 0, 0, 3, stub)
+      , new Operator('Scaling', false, 0, 0, 2, [
+          ['number', 'number', function(x, y) {
+              return transform.Scale(x, y);
+          }]
+        ])
+      , new Operator('Translation', false, 0, 0, 2, [
+            ['number', 'number', function(x, y) {
+                return transform.Offset(x, y);
+            }]
+        ])
+      , new Operator('Skew', false, 0, 0, 2, [
+            ['number', 'number', function(x, y) {
+                return transform.Identity.skew(x, y);
+            }]
+        ])
+      , new Operator('Rotation', false, 0, 0, 1, [
+            ['number', function(angle) {
+                return transform.Identity.rotate(angle);
+            }]
+        ])
+      , new Operator('Transformation', false, 0, 0, 6, [
+            ['number', 'number', 'number', 'number', 'number', 'number'
+            , function(xx, xy, yx, yy, dx, dy) {
+                return new Transformation(xx, xy, yx, yy, dx, dy);
+            }]
+        ])
+        /**
+         * Return the identity transformation
+         */
+      , new Operator('Identity', false, 0, 0, 0, function(){
+                                            return transform.Identity;})
     );
 
     engine.setBracketOperator('[', '__get__');
-
 
     // usage: engine.parse(CPSParameterValueString)
     return engine;
