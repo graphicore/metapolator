@@ -67,6 +67,7 @@ define([
      * problematic, because we'll have to invalidate the cached values.
      * If that proves to be hard, we should maybe skip the caching first
      * and see later how to make cache invalidation possible.
+     * Styledict has a similar situation in its getParameter method.
      */
     _p.get = function(name) {
         if(!(name in this._cache))
