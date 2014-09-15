@@ -40,6 +40,7 @@ define([
 
         this._bracketOperators = {};
         this._negateOperator = undefined;
+        this._finalizeMethod = undefined;
     }
 
     var _p = Parser.prototype
@@ -157,6 +158,14 @@ define([
         return result;
     };
 
+    /**
+     * The method is passed from Parser.parse to new Stack and then run in
+     * Stack.execute, with the result of the stack execution and getAPI as
+     * arguments.
+     */
+    _p.setFinalizeMethod = function(method) {
+        this._finalizeMethod = method;
+    }
 
     _p.setBracketOperator = function(bracketLiteral, operatorLiteral) {
         if(!(operatorLiteral in this._operators))
@@ -622,7 +631,7 @@ define([
     _p.parse = function(string) {
         var tokens = this.tokenize(string);
         tokens = this.infixToPostfix(tokens);
-        return new Stack(tokens);
+        return new Stack(tokens, this._finalizeMethod);
     };
 
     return Parser;
