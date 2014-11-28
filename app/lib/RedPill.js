@@ -54,7 +54,23 @@ define([
     _p._selectGlyphs = function(selector) {
         try {
             return this.project.controller.queryAll(selector)
-                .filter(function(item){ return item.type === 'glyph'; });
+                .filter(function(item){ return item.type === 'glyph'; })
+                .filter(function(item) {
+                    // display can be defined as @dictionary variable
+                    // it's entirely optional if it's truthy or not defined
+                    // the glyph is displayed, a zero is a good value for
+                    // the filter here
+                    try {
+                        return !!item.getComputedStyle().get('_display');
+                    }
+                    catch(error) {
+                        if(!(error instanceof errors.Key))
+                            throw error;
+                        //pass
+                    }
+                    // default is true
+                    return true;
+                });
         }
         catch(error){
             if(!(error instanceof CPSError))
