@@ -1,3 +1,5 @@
+console.warn('remove ReferenceDict.js, also, remove where it is used');
+
 define([
     'metapolator/errors'
   , './_CPSDict'

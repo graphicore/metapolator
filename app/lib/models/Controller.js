@@ -5,7 +5,6 @@ define([
   , 'metapolator/models/MOM/Univers'
   , 'metapolator/models/CPS/elements/Rule'
   , 'metapolator/models/CPS/StyleDict'
-  , 'metapolator/models/CPS/ReferenceDict'
   , 'metapolator/models/CPS/parsing/parseRules'
   , 'obtain/obtain'
 ], function(
@@ -15,7 +14,6 @@ define([
   , Univers
   , Rule
   , StyleDict
-  , ReferenceDict
   , parseRules
   , obtain
 ) {
@@ -35,8 +33,8 @@ define([
         this._univers = new Univers();
         this._MOM.add(this._univers);
 
-        this._caches = undefined;
-        this._resetCaches();
+        this._styleDicts = Object.create(null);// element.nodeID: styleDict
+        this._elementsForRule = Object.create(null); // {ruleName:[element.nodeIDs, ...];
     }
 
     var _p = Controller.prototype;
@@ -46,27 +44,9 @@ define([
      * monkey patched on instances
      */
     _p.StyleDict = StyleDict;
-    _p.ReferenceDict = ReferenceDict;
-
-    /**
-     * TODO: see if it's possible to invalidate only parts of the cache:
-     * when only one master is affected by a change, it is overkill
-     * to delete all the other items as well.
-     */
-    _p._resetCaches = function() {
-        this._caches = {
-            styleDicts: Object.create(null)
-          , referenceDicts: Object.create(null)
-          , rules: Object.create(null)
-        }
-    };
 
     _p.updateChangedRule = function(async, sourceName) {
-        var promise = this._ruleController.reloadRule(async, sourceName);
-        return (async
-                    ? promise.then(this._resetCaches.bind(this))
-                    : this._resetCaches()
-               );
+        return this._ruleController.reloadRule(async, sourceName);
     };
 
     _p.addMaster = function(master, sourceName) {
@@ -85,98 +65,71 @@ define([
         return this._masters[master];
     }
 
-    _p.__getRules = function(masterName, property) {
-        var ruleName = this._getMasterRule(masterName)
-          , parameterCollection = this._ruleController.getRule(false, ruleName)
-          , namespacedRules = parameterCollection[property]
-          , i = 0
-          , len = namespacedRules.length
-          , namespacedRule
-          , complexSelectors
-          , sortFunc = SelectorEngine.compareSelectorSpecificity
-          ;
-
-        for(;i<len;i++) {
-            namespacedRule = namespacedRules[i];
-            // this is expensive
-            complexSelectors = namespacedRule[1].getSelectorList(namespacedRule[0]).value;
-            complexSelectors.sort(sortFunc);
-            namespacedRules[i][0] = complexSelectors;
-        }
-        return namespacedRules;
-    };
-
-    _p._getRules = function(masterName, property) {
-        // FIXME: with this cache key the parameterCollection has to be
-        // created twice, once for rules and once fo dictionaryRules
-        // HOWEVER! the parameterCollection is cached in the rule controller
-        var key = [masterName, property].join(',')
-          , result = this._caches.rules[key];
-          ;
-        if(!result)
-            result = this._caches.rules[key] = this.__getRules(masterName, property);
-        return result;
-    };
     /**
-    * returns a single StyleDict to read the final cascaded, computed
-    * style for that element.
-    *
-    * Note: this interface element could be based on the result of
-    * rulesForElement and just search that rules up to the end
-    */
+     * returns a single StyleDict to read the final cascaded, computed
+     * style for that element.
+     */
     _p._getComputedStyle = function(element) {
-        var masterRules = element.master
-                ? this._getRules(element.master.id, 'rules')
-                : []
-          , rules = this._selectorEngine.getMatchingRules(masterRules, element)
+        // FIXME: hard coding global.css is not good here, can this
+        // be done configurable?
+        var ruleName = element.master
+                    ? this._getMasterRule(element.master.id)
+                    : 'global.css'
+          , parameterCollection = this._ruleController.getRule(false, ruleName)
+          , rules = this._selectorEngine.getMatchingRules(
+                                        parameterCollection.rules, element)
           ;
-        return new this.StyleDict(this, rules, element);
+        if(!this._elementsForRule[ruleName]) {
+            this._elementsForRule[ruleName] = [];
+            // subscribe only once, this saves calling us a lot of handlers
+            // for each styledict
+            parameterCollection.on('structural-change', [this, 'updateRule'], [ruleName]);
+        }
+        styleDict = new this.StyleDict(this, rules, element)
+        this._styleDicts[element.nodeID] = styleDict;
+        this._elementsForRule[ruleName].push(element.nodeID);
+        return styleDict;
     }
 
     _p.getComputedStyle = function(element) {
         if(element.multivers !== this._MOM)
             throw new CPSError('getComputedStyle with an element that is not '
                 + 'part of the multivers is not supported' + element);
-        if(!this._caches.styleDicts[element.nodeID])
-            this._caches.styleDicts[element.nodeID] = this._getComputedStyle(element);
-        return this._caches.styleDicts[element.nodeID];
+        // this._styleDicts cache set in _getComputedStyle
+        return this._styleDicts[element.nodeID] || this._getComputedStyle(element);
     }
 
-    _p._getReferenceDictionary = function(element) {
-        throw new errors.Deprecated('@dictionary should not get intialized anymore!');
-        var masterRules = element.master
-                ? this._getRules(element.master.id, 'dictionaryRules')
-                : []
-        var rules = this._selectorEngine.getMatchingRules(masterRules, element);
-        return new this.ReferenceDict(this, rules, element);
-    }
 
     /**
-     * A reference dictionary is the interface to the values referenced
-     * by the @dictionary CPS rules
+     * Update each styleDict that uses the rule called `ruleName`
      */
-    _p.getReferenceDictionary = function(element) {
-        if(element.multivers !== this._MOM)
-            throw new CPSError('getReferenceDictionary with an element that is not '
-                + 'part of the multivers is not supported' + element);
-        if(!this._caches.referenceDicts[element.nodeID])
-            this._caches.referenceDicts[element.nodeID] = this._getReferenceDictionary(element);
-        return this._caches.referenceDicts[element.nodeID];
-    };
-
-    _p._checkScope = function(scope) {
-        var i=0;
-        if(scope) {
-            if(!(scope instanceof Array))
-                scope = [scope];
-            for(;i<scope.length;i++)
-                if(scope[i].multivers !== this._MOM)
-                    throw new CPSError('Query with a scope that is not '
-                        +'part of the multivers is not supported '
-                        + scope[i].particulars);
+    _p.updateRule(ruleName) {
+        var ids = this._elementsForRule[ruleName]
+          , parameterCollection, allRules, styleDict, rules
+          ;
+        if(!ids) return;
+        parameterCollection = this._ruleController.getRule(false, ruleName);
+        allRules = parameterCollection.rules;
+        for(i=0,l=ids.length;i<l;i++) {
+            styleDict = this._styleDicts[ ids[i] ];
+            rules = this._selectorEngine.getMatchingRules(allRules, styleDict.element);
+            styleDict.setRules(rules);
         }
-        else
-            scope = [this._MOM];
+    }
+
+    _p._checkScope = function(_scope) {
+        var i, scope;
+        if(!_scope)
+            return [this._MOM];
+        scope = _scope instanceof Array
+            ? _scope
+            : [_scope]
+            ;
+        for(i=0;i<scope.length;i++)
+            if(scope[i].multivers !== this._MOM)
+                throw new CPSError('Query with a scope that is not '
+                    +'part of the multivers is not supported '
+                    + scope[i].particulars);
         return scope;
     }
 

@@ -114,69 +114,81 @@ define([
     // The reason for having shadowed keys is rather in reporducing input
     // CPS than in a way that I want an application to author CPS.
     _p.setParameter(item) = function {
-        var name = item.name
+        var key = item.name
           , items = this._items
           , index
+          , event
           ;
         if(!_filterParameters(parameter))
-            // FIXME return [false, message] || thow InvalidError(message)?
+            // FIXME return [false, message] || throw InvalidError(message)?
             return;
-        if(!this.has(name)) {
+        if(!this.has(key)) {
             // Todo: add event
+            event = 'add';
             index = items.length;
-            items.push(name);
-            if(!this._indexes[name])
-                this._indexes[name] = [];
-            this._indexes[name].push(index);
-            this._keys.push(name);
+            items.push(key);
+            if(!this._indexes[key])
+                this._indexes[key] = [];
+            this._indexes[key].push(index);
+            this._keys.push(key);
         }
         else {
             // Todo: change event
-            index = this._dict[name];
+            event = 'change';
+            index = this._dict[key];
+            items[index].invalidateCaches();
             items[index] = parameter;
         }
-        this._dict[name] = index;
+        this._dict[key] = index;
         // emit event
+        this._trigger(event, key);
     }
 
     // remove all items with key as name
+    // return number of removed items
     _p.erase(key) {
         var count = 0, indexes, i
           , items = this._items
           ;
-        if(!this.has(key))
+        if(!this._indexes)
+            this._buildIndex();
+        if(!(indexes = this._indexes[key]))
             return 0;
-        indexes = this._indexes[key])
-        this._indexes[key] = [];
+        this._indexes[key] = undefined;
         indexes.sort();// lowest index is first.
-        for(i=count=indexes.length-1;i>=0;i--)
-            items.splice(i, 1);
-        delete this._dict[key];
+        for(i=0, count=indexes.length; i<count;i++)
+            items[i].invalidateCaches();
         this._keys = Object.keys();
+        if(key in this._dict) {
+            delete this._dict[key];
+            this._trigger('delete', key);
+        }
+        return count;
     }
 
     // delete the currently active item for key, if there is a active item
     _p.removeCurrentActiveParameter = function(key) {
         // return number of removed items
         // FIXME: maybe if there is an active key left is also interesting
-        var count = 0, indexes, index, i
+        var indexes, index, i
           , items = this._items
           , keys
           ;
         if(!this.has(key))
-            return;
+            return 0;
         // delete the currently active item for key
-        count = 1;
         index = this._dict[key];
+        items[index].invalidateCaches();
         items.splice(index, 1);
         delete this._dict[key];
         indexes = this._indexes[key];
         indexes.sort();
         for(i=indexes.length;i>=0;i--) {
-            if(indexes[i] === index)
+            if(indexes[i] === index) {
                 // the old active key must come first in this iteration
                 // because the highest valid index is the active item
                 indexes.splice(i, 1);
+            }
             else if(_filterParameters(items[indexes[i]])) {
                 // this changed the active value
                 this._dict[key] = indexes[i];
@@ -186,22 +198,14 @@ define([
         if(!(key in this._dict)) {
             this._keys = Object.keys(this._dict);
             // delete event!
+            this._trigger('delete', key);
         }
         else {
-             // change event!
-            "";
+            // change event!
+            this._trigger('change', key);
         }
-        return count;
+        return 1;
     }
-
-
-    _p.appendParameter(value) = function {}
-    _p.insertParameter(index, value) = function {}
-    // if there is no "name" => append
-    _p.replaceParameter(name, value) = function {}
-    // TODO: listen for parameter changes
-    // emmit events accordingly
-
 
     _p.keys = function() {
         if(!this._keys)

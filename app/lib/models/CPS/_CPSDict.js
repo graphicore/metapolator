@@ -1,3 +1,5 @@
+console.warn('remove _CPSDict.js');
+
 define([
     'metapolator/errors'
 ], function(

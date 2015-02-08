@@ -26,8 +26,21 @@ define([
     * whitewlistGetter itself.
     */
     function genericGetter(item, name) {
-        if(item instanceof _MOMNode)
+        if(item instanceof _MOMNode){
+            var cs = item.getComputedStyle(),
+              , result = cs.get(name)
+              // NOTE the this!!!
+              ,
+              ;
+            if( the combination of (cs  name) is not yet in this._cacheDependencies[name] ) {
+                var subscriberID = cs.onPropertyChange(name, [this, 'invalidateCache'])
+                if(!this._cacheDependencies[name]) this._cacheDependencies[name] = [];
+                this._cacheDependencies[name].push([cs, subscriberID]);
+            }
+            // END: just sketching ...
             return item.getComputedStyle().get(name);
+
+        }
         return whitelistGetter(item, name);
     }
 
@@ -35,12 +48,24 @@ define([
      *
      */
     function whitelistGetter(item, name) {
+        var result;
         if(item === undefined){}//pass
         else if(item.cps_proxy)
-            return item.cps_proxy[name]
+            result = item.cps_proxy[name]
         else if(item instanceof Array)
-            return whitelistProxies.array(item)[name];
-        throw new KeyError('Item "'+item+'" doesn\'t specify a whitelist for cps, trying to read '+name);
+            result = whitelistProxies.array(item)[name];
+        else
+            throw new KeyError('Item "'+item+'" doesn\'t specify a whitelist for cps, trying to read '+name);
+
+        // NOTE the this!!!
+        // ALSO: this can only happen if item has the subscribe API
+        if( the combination of (item  name) is not yet in this._cacheDependencies[name] ) {
+            var subscriberID = item.onPropertyChange(name, [this, 'invalidateCache'])
+            if(!this._cacheDependencies[name]) this._cacheDependencies[name] = [];
+            this._cacheDependencies[name].push([item, subscriberID]);
+        }
+        return result
+
     }
 
     return {

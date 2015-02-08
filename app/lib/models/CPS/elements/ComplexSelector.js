@@ -8,23 +8,23 @@ define([
   , Combinator
 ) {
     "use strict";
-    
+
     var CPSError = errors.CPS
     /**
      * A ComplexSelector is a chain of one or more compound selectors
-     * separated by combinators. 
-     * 
+     * separated by combinators.
+     *
      * TODO: we will need to extract the meaning of the elements
-     * 
+     *
      * so far, we extract:
-     * 
+     *
      * simple selectors:
      *          universal, type, id, class, id, pseudo-class pseudo-element
-     * 
-     * 
+     *
+     *
      * A selector may be invalid, which would mark its selectorList invalid
      * (and thus all selectors in that list)
-     * 
+     *
      *  reasons for invalid selectors:
      *      it's empty
      *      a child of it is invalid
@@ -32,22 +32,23 @@ define([
      *          only possible for > at the moment
      *          invalid: master>>penstroke
      *          valid: master>*>penstroke
-     * 
+     *
      * a compound selector is invalid if
      *      - it has more than one of universal or type selector
-     *      - a universal or type selector occurs not as first 
-     * 
-     * 
+     *      - a universal or type selector occurs not as first
+     *
+     *
      * A selector may be alien, which means we ignore it, because we don't
      * understand it. an alien selector is not invalid, thus its selectorlist
      * is still valid.
-     * 
-     * 
+     *
+     *
      */
     function ComplexSelector(value, source, lineNo) {
         Parent.call(this, source, lineNo);
         this._value = value;
         this._invalid = false;
+        // FIXME remove "alien" just make it invalid!
         this._alien = false;
         this._message = undefined;
         this._specificity = null;
@@ -55,7 +56,7 @@ define([
         var i = 0
           , item
           ;
-        
+
         for(;i<this._value.length;i++) {
             item = value[i];
             if(item instanceof Combinator) {
@@ -93,7 +94,7 @@ define([
         if(!this._value.length) {
             this._invalid = true;
             this._message =  'A selector must not be empty'
-        } 
+        }
         else if(this._value[this._value.length-1] instanceof Combinator) {
                 this._invalid = true;
                 this._message ='The last item of a selector must not '
@@ -101,27 +102,27 @@ define([
                                 + this._value[this._value.length-1].value;
         }
     }
-    
+
     ComplexSelector.add = function(a, b) {
         var value = a.value;
         value.push(new Combinator(' ', a.source, a.lineNo));
         Array.prototype.push.apply(value, b._value);
         return new ComplexSelector(value, a.source, a.lineNo);
     }
-    
+
     var _p = ComplexSelector.prototype = Object.create(Parent.prototype)
     _p.constructor = ComplexSelector;
-    
+
     _p.toString = function() {
         return this._value.join('');
     }
-    
+
     _p._combinators = {
         // the child combinator
         'child' : true
       , 'descendant': true
     }
-    
+
     Object.defineProperty(_p, 'selects', {
         get: function(){ return !this._invalid && !this._alien; }
     });
@@ -140,7 +141,7 @@ define([
             // if value is falsy, return its falsy value (probably undefiend)
             return this._value && this._value.slice();}
     });
-    
+
     Object.defineProperty(_p, 'specificity', {
         get: function() {
             var a, b, c, i=0, specificity;
@@ -159,10 +160,10 @@ define([
             return this._specificity;
         }
     })
-    
+
     _p.add = function(complexSelector) {
         return this.constructor.add(this, complexSelector);
     }
-    
+
     return ComplexSelector;
 })

@@ -12,14 +12,14 @@ define([
         this._selectorList = selectorList;
         this._parameters = parameterDict;
     }
-    
+
     var _p = Rule.prototype = Object.create(Parent.prototype)
     _p.constructor = Rule;
-    
+
     _p.toString = function() {
         return [this._selectorList, ' ', this._parameters].join('');
     }
-    
+
     /**
      * If no namespaces are provided, the result of this method equals
      * this._selectorList.
@@ -36,10 +36,20 @@ define([
         }
         return selectorList;
     }
-    
+
+    _p.setSelectorList = function(selectorList) {
+        if(selectorList.invalid)
+            // FIXME return [false, message] || throw InvalidError(selectorList.message)?
+            return;
+        this._selectorList = selectorList;
+        // this triggers change only when selectorList is replaced
+        // the this._parameters will trigger changes itself!.
+        this.trigger('selector-change');
+    }
+
     Object.defineProperty(_p, 'parameters', {
         get: function(){ return this._parameters; }
     })
-    
+
     return Rule;
 })
