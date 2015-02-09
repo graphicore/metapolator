@@ -49,7 +49,17 @@ define([
      */
     function whitelistGetter(item, name) {
         var result;
-        if(item === undefined){}//pass
+        if(item === undefined){
+            //pass
+            throw new Error('trying to read "'+key+'" from an undefined item');
+            // analogue to StyleDict.getAPI.genericGetter
+            // used to be a
+            // pass
+            // is this happening at ALL?
+            // in which case?
+            // is that case legit?
+
+        }
         else if(item.cps_proxy)
             result = item.cps_proxy[name]
         else if(item instanceof Array)

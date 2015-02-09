@@ -23,13 +23,35 @@ define([
         // see: http://jsperf.com/bind-vs-native-bind-run
         // that may change in the future
         var self = this;
-        this.getAPI = function(name){ return self.get(name);};
+
+
+        // new GetAPI(this); => would make a cleaner definition, but maybe slows things down???
+        this.getAPI = {
+            get: function(name){
+                // this must yield in the same result like
+                // getAPI.genericGetter(self.element, name)
+                // INCLUDING the subscription
+                // the usage of `get` means the value has a dependency on a name
+                // in this StyleDict/namespace
+                // but can be implemented more performant, I think!
+                return self.get(name);
+
+            }
+          , query: function(node, selector){}
+          , genericGetter: function(item, key){}
+        };
+
+
         Object.define(this, 'element', {
             value: element
           , enumerable: true
         });
         this._controller = controller;
-        this._getting = {};
+        this._getting = {
+            recurionDetection: Object.create(null)
+          , stack: []
+          , current: null
+        };
 
         this._rules = rules;
         this._dict = null;
@@ -38,6 +60,73 @@ define([
 
     var _p = StyleDict.prototype;
     _p.constructor = StyleDict;
+
+
+    _p._subscribeTo(item, key) {
+        var subscriberID
+          , unique_key: the combination of (item + key) each looked up item must have a unique key ... not bad
+          , current = this._getting.current
+          , dependencies = this._cacheDependencies[current]
+          ;
+        if(!dependencies)
+            dependencies = this._cacheDependencies[current] = Object.create(null);
+        else if(unique_key in dependencies)
+            return;
+        subscriberID = item.onPropertyChange(key, [this, 'invalidateCache'], current);
+        dependencies.push([item, subscriberID]);
+    }
+
+    function genericGetter(item, key) {
+        var result;
+        if(item === undefined) {
+            // used to be a
+            // pass
+            // is this happening at ALL?
+            // in which case?
+            // is that case legit?
+            throw new Error('trying to read "'+key+'" from an undefined item');
+            // also see cpsGetters.whitelist for a similar case
+        }
+        else if(item instanceof _MOMNode) {
+            var cs = item.getComputedStyle();
+            result = cs.get(key);
+            this._subscribeTo(cs, key);
+        }
+        else if(item.cps_proxy) {
+            // FIXME:
+            // do we need this case at all? probably when item is a
+            // PenStrokePoint.skeleton and key is on/in/out
+            // I don't know if there's another case
+            // This means, however that everything that has a cps_proxy
+            // will have to provide a `onPropertyChange` API (which makes totally sense)
+            // arrays are obviously exceptions...
+            // so, the do we need this subscription at all question arses again
+            //
+            // FIXME: how to get a unique key for item?
+            // what items are this exactly?
+            //
+            // FIXME: can't we just not subscribe to this and do the same as with array
+            // that is the original source of this item must be subscribed and =
+            // fire if item changes...
+            // it is probably happening in __get anyways, like this
+            // cpsGetters.whitelist(this.element, name);
+            // and then a this._subscribeTo(this.element, name)
+            // REMEMBER: this code was extracted from a merge of
+            // cpsGetters.generic plus cpsGetters.whitelist
+            // so, in the best case, we wouldn't use this condition at all,
+            // I think
+            result = item.cps_proxy[key];
+            this._subscribeTo(item, key);
+        }
+        else if(item instanceof Array)
+            result = whitelistProxies.array(item)[key];
+            // no subscription! the source of the Array should be subscribed
+            // to and fire when the array changes
+        else
+            throw new KeyError('Item "'+item+'" doesn\'t specify a whitelist for cps, trying to read '+key);
+        return result
+    }
+
 
     _p._buildIndex = function() {
         var i, l, j, ll, keys, key, parameters;
@@ -90,7 +179,9 @@ define([
     /**
      *  if name is in cache, invalidate the cache and inform all subscribers/dependants
      */
-    _p.invalidateCache = function(key) {
+    _p.invalidateCache = function(key, event_key) {
+        // this _cache[key] is now invalid, because event_key changed at another element
+
         // FIXME: _p.get should not be called while this is running!
         // remove this check if everything behaves right.
         this._invalidating = true;
@@ -98,8 +189,8 @@ define([
         var subscribers, callback;
         if(!(key in this._cache)){
             // Because the key is not cached, ther must not be any dependenciy or dependant
-            // assert !this._cacheDependencies[key] || !this._cacheDependencies[key].length
-            // assert !this._dependants[key] || !this._dependants[key].length
+            assert !this._cacheDependencies[key] || !this._cacheDependencies[key].length
+            assert !this._dependants[key] || !this._dependants[key].length
             return;
         }
         delete this._cache[key];
@@ -108,9 +199,9 @@ define([
         // function: => unsubscribe from dependencies
         // we have probably collected dependencies for this cache, since
         // the cache is now invalidated, the dependencies can be unsubscribed
-        var cacheDependencies = this._cacheDependencies[key], cacheDependeny;
-        if(cacheDependencies)
-            while(dependeny = cacheDependencies.pop())
+        var dependencies = this._cacheDependencies[key], dependeny;
+        if(dependencies)
+            while(dependeny = dependencies.pop())
                 dependeny[0].unsubscribePropertyChange(dependeny[1]);
 
 
@@ -141,14 +232,16 @@ define([
         // if, after the callback (i in dependants)
         // then something went wrong
         for(i=dependants.length-1;i>=0;i--) {
-            callback = dependants[i];
+            var callback = dependants[i][0]
+              , data = dependants[i][1]
+              ;
             // callback may be null // from unsubscribePropertyChange
             if(callback instanceof Function)
-                callback(key);
+                callback(data, key);
             else if(callback instanceof Array)
                 // callback = [object, 'methodName']
                 // this is done to avoid to many new bound functions
-                callback[0][callback[1]](key);
+                callback[0][callback[1]](data, key);
             // can be removed when everything works
             // this checks rather if the depandant does invalidate itself propperly
             assert(!(i in dependants), 'dependant should have used unsubscribePropertyChange');
@@ -164,14 +257,14 @@ define([
     // TODO: find  a new name
     //            onDependencyInvalidation(key, callback)
     // the subscription will be undone after being called once
-    _p.onPropertyChange = function(key, callback) {
+    _p.onPropertyChange = function(key, callback, data) {
         var dependants = this._dependants[key]
           , subscriberID// <== make this globally unique for the runtime? would be harder to unsubscribe accidentially
           ;
         if(!dependants)
             dependants = this._dependants[key] = [];
         subscriberID = dependants.length;
-        dependants.push(callback);
+        dependants.push([callback, data]);
         return subscriberID;
     };
 
@@ -217,24 +310,18 @@ define([
     };
 
     _p.__get = function(name, errors) {
-        var param = this._getParameter(name);
+        var param = this._getParameter(name)
+          , result
+          ;
         if(param)
            return param.getValue();
         errors.push(name + ' not found for ' + this.element.particulars);
-
-        // TODO: subscribe to this.element
-        // FIXME: just sketching ...
-        var result = cpsGetters.whitelist(this.element, name);
-        // so something like the following must happen in the formulae
-        // language??? (or maybe in the cpsGetters module...)
-        // FIXME: note the onPropertyChange api is the same as implemented here in StyleDict
-        if( the combination of (this.element  name) is not yet in this._cacheDependencies[name] ) {
-            var subscriberID = this.element.onPropertyChange(name, [this, 'invalidateCache']);
-            if(!this._cacheDependencies[name]) this._dependencies[name] = [];
-            this._cacheDependencies[name].push([this.element, subscriberID]);
-        }
-        // END: just sketching ...
-
+        // FIXME: prefer the following, then the cpsGetters module can be removed!
+        // if that is not possible, it's certainly interesting why
+        result = this.element.cps_proxy[key];
+        // old:
+        // result = cpsGetters.whitelist(this.element, name);
+        this._subscribeTo(this.element, name);
         return result;
     };
     /**
@@ -263,11 +350,13 @@ define([
             return this.element;
 
         // Detect recursion on this.element
-        if(name in this._getting)
+        if(name in this._getting.recurionDetection)
             throw new CPSRecursionError('Looking up "' + name
                             + '" is causing recursion in the element: '
                             + this.element.particulars);
-        this._getting[name] = true;
+        this._getting.recurionDetection[name] = true;
+        this._getting.stack.push(this._getting.current);
+        this._getting.current = name;
         try {
             return this.__get(name, errors);
         }
@@ -278,7 +367,8 @@ define([
             throw new KeyError(errors.join('\n----\n'));
         }
         finally {
-            delete this._getting[name];
+            delete this._getting.recurionDetection[name];
+            this._getting.current = this._gettingStack.pop();
         }
     };
     // FIXME: memoize seems to be slower, can we fix it?
