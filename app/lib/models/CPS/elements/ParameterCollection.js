@@ -83,6 +83,10 @@ define([
     //
     // We dont need invalidation of this cache if a Rule changed the contents
     // of its ParameterDict!
+
+
+
+
     /**
      * this returns all rules that are direct children of this collection
      * AND all rules of ParameterCollection instances that are
@@ -96,10 +100,20 @@ define([
         }
     });
 
-    // FIXME: - this needs caching
-    //        - cache invalidation should be done via the yet to come internal mechanisms
-    //        - the _getRules method and the "rules" getter are outdated, rename this into them
+    // FIXME:
+    //    - cache invalidation should be done via the yet to come internal mechanisms
     //
+    _p.childChangeHandler = function(){
+
+
+    };
+
+    _p.on = function(){
+        // parameterCollection.on('structural-change', [this, 'updateRule'], [ruleName]);
+    }
+
+
+
     _p._getRules = function () {
         var i, l, j, ll
           , rules = []
@@ -110,6 +124,7 @@ define([
         for(i=0, l=this._items.length;i<l;i++) {
             item = this._items[i];
             if(item instanceof Rule) {
+                item.on(['selector-change', 'delete'], [this, 'childChangeHandler'], [ruleName]);
                 selectorList = item.getSelectorList();
                 if(! selectorList.selects ) continue;
                 // 0: array of namespaces, initially empty
@@ -127,6 +142,12 @@ define([
                     rule[2].push(this);
                     rules.push(rule);
                 }
+                // FIXME: make a _subscribeTo method;
+                // FIXME: summarize ['selector-change', 'rule-set-change', 'delete'] as structure change?
+                // FIXME: must decide which events need to happen where!
+                // a "structure-change" is enough for the Controller, but
+                // is it enough internally?
+                item.on(['selector-change', 'rule-set-change', 'delete'], [this, 'childChangeHandler'], [ruleName]);
             }
         }
         return rules;

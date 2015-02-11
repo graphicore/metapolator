@@ -98,6 +98,12 @@ define([
         }
     };
 
+    //FIXME:
+    // look at a simpler api, like the common on/off API
+    // the subscriptions here are not so complex as the ones in StyleDict
+    subscription[1] = parameters.onPropertyChange(key, [this, 'updateDictEntry'], key);
+    subscription[0].offPropertyChange(key, subscription[1]);
+
     // FIXME: for an api it would be easier to neglegt the inner data-structure
     // and just make it possible to work with the currently active entries
     // maybe we can implement that and then another set of calls that makes
