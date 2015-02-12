@@ -61,6 +61,9 @@ define(function() {
     makeError('Import', undefined , new errors.CPS);
     makeError('ImportPenstroke', undefined , new errors.Import);
     makeError('ImportContour', undefined , new errors.Import);
+    makeError('Event', undefined , new errors.Error);
+    makeError('Emitter', undefined , new errors.Event);
+    makeError('Receiver', undefined , new errors.Event);
 
     /**
      * if expression is false, throw an Assertion

@@ -62,9 +62,8 @@ define([
         // somewhere else!
 
         this._selectorList = selectorList;
-        // this triggers change only when selectorList is replaced
-        // the this._parameters will trigger changes itself!.
-        this.trigger('change');
+        this._unsetRulesCache();
+        this._trigger(['selector-change', 'structural-change']);
     }
 
     /**

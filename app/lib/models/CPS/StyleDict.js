@@ -2,18 +2,41 @@ define([
     'metapolator/errors'
   , './cpsGetters'
   , 'metapolator/memoize'
+  , 'metapolator/models/emitterMixin'
 ], function(
     errors
   , cpsGetters
   , memoize
+  , emitterMixin
 ) {
     "use strict";
 
     var KeyError = errors.Key
+      , ReceiverError = errors.Receiver
+      , AssertionError = errors.Assertion
       , CPSKeyError = errors.CPSKey
       , CPSRecursionError = errors.CPSRecursion
       , assert = errors.assert
+      , propertyChangeEmitterSetup
       ;
+
+    propertyChangeEmitterSetup = {
+          stateProperty: '_dependants'
+        , onAPI: 'onPropertyChange'
+        // TODO: Not deleting the channel will take a bit more memory but in turn
+        // needs less garbadge collection
+        // we could delete this when the key is removed from this._dict
+        // and not added again, supposedly in _rebuildIndex and _paramerChangeHandler
+        // delete this._dependants[key];
+        // however, _rebuildIndex and updateDictEntry are not part of
+        // the concept of emitter/channel thus the emitter should
+        // provide a method: removeProperty(channel) which in turn can be called by
+        // _rebuildIndex and updateDictEntry. Also, that would throw an error
+        // if there are any subscriptions left. (we may add a on-delete event)
+        // for that case!?
+        , offAPI: 'offPropertyChange'
+        , triggerAPI: '_triggerPropertyChange'
+    };
 
     /**
      * StyleDict is an interface to a List of CPS.Rule elements.
@@ -58,6 +81,45 @@ define([
         this._dict = null;
         this._cache = Object.create(null);
 
+        // subscriptions to the "add" channel of each parameterDict in this._rules
+        this._dictSubscriptions = [];
+
+        // subscriptions to the active key in a parameterDict
+        //
+        // triggered on "change" and "delete" (also on "add" but we subscribe later)
+        //
+        // cache_key refers to the same name here and in the parameterDict
+        // {
+        //    cache_key: [parameterDict, subscriptionUid] /* information needed to unsubscribe */
+        // }
+        this._propertySubscriptions = Object.create(null);
+
+        // All current subscriptions to dependencies of the cache.
+        // One subscription can be used by many _cache entries.
+        // {
+        //    subscriptionUid: [
+        //        /* information needed to unsubscribe */
+        //          item // the item/element/object subscribed to
+        //        , subscriberId // needed to unsubscribe, returned when subscribing
+        //
+        //        /* information to control subscribing and unsubscribing */
+        //        , object // set of _cache keys subscribed to this
+        //        , 0 // counter, number of dependencies, same as previous Object.keys(object).length
+        //    ];
+        //}
+        this._cacheSubscriptions = Object.create(null);
+
+        // the subscriptionUids for each key in cache
+        // {
+        //    cache_key: [subscriptionUid, ...]
+        // }
+        this._cacheDependencies = Object.create(null);
+
+        // emitter: PropertyChange
+        // Adds this[propertyChangeEmitterSetup.stateProperty]
+        // which is this._dependencies
+        emitterMixin.init(this, propertyChangeEmitterSetup);
+
         this._subscriptionUidCounter = 0;
         this._subscriptionUids = new WeakMap();
     }
@@ -65,11 +127,25 @@ define([
     var _p = StyleDict.prototype;
     _p.constructor = StyleDict;
 
+    /**
+     * adds the methods:
+     *    onPropertyChange(propertyName, subscriberData) // returns subscriptionId
+     *    offPropertyChange(subscriptionId)
+     *    _triggerPropertyChange(propertyName, eventData)
+     */
+    emitterMixin(_p, propertyChangeEmitterSetup);
+
     _p._getSubscriptionUid = function(item, key) {
         var uid;
         if(item instanceof _MOMNode) {
             if(key instanceof SelectorList)
-                return item.nodeID + 'S' + key;
+                // TODO: currently all subtree changes are handled as one.
+                // I think we may become finer grained here. Like for example
+                // only fire if a change in a subtree affects the result
+                // of item.query(key); then, the SubscriptionUid must be
+                // different for different selectors. Until then all selectors
+                // for a _MOMNode have the same SubscriptionUid:
+                return item.nodeID + 'S:$'// + key
             else
                 return item.nodeID + ':' + key;
         }
@@ -96,29 +172,32 @@ define([
                 // TODO: this can be controlled finer. But at the moment
                 // we don't do MOM tree changes anyways.
                 assert(item instanceof _MOMNode, 'When "key" is a Selector "item" must be a MOM Element.');
-                subscriberId = item.onSubtreeChange(key, [this, 'invalidateCacheHandler'], subscriptionUid);
+                subscriberId = item.onSubtreeChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
             }
-            else
-                subscriberId = item.onPropertyChange(key, [this, 'invalidateCacheHandler'], subscriptionUid);
+            else {
+                subscriberId = item.onPropertyChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
+            }
             dependencies = this._cacheSubscriptions[subscriptionUid]
-                         = [item, key, subscriberId, Object.create(null), 0];
+                         = [item, subscriberId, Object.create(null), 0];
         }
-        else if(current in dependencies[3])
+        else if(current in dependencies[2])
             // that cache already subscribed to item.key
             return;
-        dependencies[3][current] = true;//index
-        dependencies[4] += 1;// counter
+        dependencies[2][current] = true;//index
+        dependencies[3 += 1;// counter
 
         if(!this._cacheDependencies[current])
             this._cacheDependencies[current] = [];
         this._cacheDependencies[current].push(subscriptionUid);
     };
 
-    _p.invalidateCacheHandler = function(subscriptionUid) {
+    _p._invalidateCacheHandler = function(subscriptionUid) {
         assert(subscriptionUid in this._cacheSubscriptions, 'must be subscribed now');
-        var dependencies = this._cacheSubscriptions[subscriptionUid][3], key;
-        for(key in dependencies)
-            this.invalidateCache(key);
+        var dependencies = Object.keys(this._cacheSubscriptions[subscriptionUid][2])
+          , i, l
+          ;
+        for(i=0,l=dependencies.length;i<l;i++)
+            this._invalidateCache(dependencies[i]);
         assert(!(subscriptionUid in this._cacheSubscriptions), 'must NOT be subscribed anymore');
     };
 
@@ -136,12 +215,12 @@ define([
             subscriptionUid = dependencies[i];
             subscription = this._cacheSubscriptions[subscriptionUid];
             // remove dependency key from subscription
-            delete subscription[3][key];//index
-            subscription[4] -= 1;//counter
-            if(subscription[4])
+            delete subscription[2][key];//index
+            subscription[3] -= 1;//counter
+            if(subscription[3])
                 continue;
             // no deps left
-            subscription[0].offPropertyChange(subscription[1], subscription[2]);
+            subscription[0].offPropertyChange(subscription[1]);
             delete this._cacheSubscriptions[subscriptionUid];
         }
         delete this._cacheDependencies[key];
@@ -201,11 +280,14 @@ define([
         this._dict = Object.create(null);
         for(i=0,l=this._rules.length;i<l;i++) {
             parameters = this._rules[i].parameters;
+            subscriberID = parameters.on('add', [this, '_parameterAddHandler'], i);
+            this._dictSubscriptions.push([parameters, subscriberID]);
+
             keys = parameters.keys();
             for(j=0, ll=keys.length; j<ll; j++) {
                 key = keys[j];
                 if(!(key in this._dict))
-                    this._setDictValue(parameters, key);
+                    this._setDictValue(parameters, key, i);
             }
         }
     };
@@ -222,16 +304,22 @@ define([
      * The value of this StyleDict may not change in the end but we don't
      * know that before)
      *
-     * This doesn't include add/remove/change events of parameters/parameterDicts,
+     * This doesn't include add/remove events of parameters/parameterDicts,
      * we'll handle that on another level.
      */
     _p.setRules = function(rules) {
+        var i, l, subscription;
         this._rules = rules;
+
+        for(i=0;l=this._dictSubscriptions.length;i<l;i++) {
+            subscription = this._dictSubscriptions[i];
+            subscription[0].off(subscriptionp[1]);
+        }
         this._rebuildIndex();
     };
 
     _p._rebuildIndex = function() {
-        var key, subscription;
+        var key;
         for(key in this._dict) {
             this._unsetDictValue(key);
             this._invalidateCache(key);
@@ -239,34 +327,84 @@ define([
         this._buildIndex();
     };
 
-    _p._setDictValue = function(parameters, key) {
-        assert(!(key in this._dictDependencies), 'there may be no dependency yet!');
-        var subscription = this._dictDependencies[key] = [];
-        subscription[0] = parameters;
-        subscription[1] = parameters.onPropertyChange(key, [this, 'updateDictEntry'], key);
+    /**
+     * parameters.onPropertyChange wont trigger on "add", because we won't
+     * have subscribed to it by then.
+     */
+    _p._parameterAddHandler = function(data, channelKey, key) {
+        var index = data
+          , parametersIndexForKey = this._propertySubscriptions[key]
+                    ? this._propertySubscriptions[key][2]
+                    : false
+          ;
+        if(parametersIndexForKey > index)
+            // the higher index overrides the lower index
+            return;
+        else if(parametersIndexForKey < index) {
+            this._unsetDictValue(key);
+            this._invalidateCache(key);
+        }
+        else if(parametersIndexForKey === index)
+            // When both are identical this means we don't have an "add"
+            // event by definition! Something in the programming logic went
+            // terribly wrong.
+            throw new AssertionError('The old index must not be identical '
+                        + 'to the new one, but it is.\n index: ' + index
+                        + ' key: ' + key
+                        + ' channel: ' + channelKey);
+        this._setDictValue(this._rules[index], key, index);
+    }
+
+    _p._setDictValue = function(parameters, key, parametersIndex) {
+        assert(!(key in this._propertySubscriptions), 'there may be no dependency yet!');
+        var subscription = this._propertySubscriptions[key] = [];
         this._dict[key] = parameters.get(key);
+        subscription[0] = parameters;
+        subscription[1] = parameters.onPropertyChange(key, [this, '_paramerChangeHandler'], parameters);
+        subscription[2] = parametersIndex;
     };
 
     _p._unsetDictValue = function(key) {
-        var subscription = this._dictDependencies[key];
-        subscription[0].offPropertyChange(key, subscription[1]);
+        var subscription = this._propertySubscriptions[key];
+        subscription[0].offPropertyChange(subscription[1]);
         delete this._dict[key];
-        delete this._dictDependencies[key];
+        delete this._propertySubscriptions[key];
     };
 
-    _p.updateDictEntry = function(key) {
-        // remake the this._dict entry for name
+    /**
+     *  remake the this._dict entry for name
+     */
+    _p._updateDictEntry = function(key) {
         var i, l, parameters;
         this._unsetDictValue(key);
-        this.invalidateCache(key);
+        this._invalidateCache(key);
         for(i=0,l=this._rules.length;i<l;i++) {
             parameters = this._rules[i].parameters;
             if(!parameters.has(key))
                 continue;
-            this._setDictValue(parameters, key);
+            this._setDictValue(parameters, key, i);
             break;
         }
     };
+
+
+    _p._paramerChangeHandler = function(parameters, key, eventData) {
+        switch(eventData) {
+            case('change'):
+                // The value is still active and available, but its definition changed
+                this._dict[key] = parameters.get(key);
+                this._invalidateCache(key);
+                break;
+            case('delete'):
+                // the key of parameters was removed without replacement
+                // remove the entry and look for a new one
+                this._updateDictEntry(key);
+                break;
+            default:
+                throw new ReceiverError('Expected an event of "change" or '
+                                       + '"delete" but got "'+eventData+'"');
+        }
+    }
 
     /**
      *  if name is in cache, invalidate the cache and inform all subscribers/dependants
@@ -280,6 +418,9 @@ define([
             // Because the key is not cached, there must not be any dependency or dependant
             assert(!this._cacheDependencies[key] || !this._cacheDependencies[key].length
                 , 'Because the key is not cached, there must not be any dependency or dependant');
+            // FIXME: this should be the concern of the channel: PropertyChange
+            // it certainly is wrong in here... remove without replacement when everything works
+            // fine.
             assert(!this._dependants[key] || !this._dependants[key].length
                 , 'Because the key is not cached, there must not be any dependency or dependant');
             return;
@@ -289,72 +430,6 @@ define([
         this._triggerPropertyChange(key);
         this._invalidating = false;
     };
-
-    _p._triggerPropertyChange = function(key) {
-        var dependants = this._dependants[key]
-          , callback
-          , data
-          ;
-        if(!dependants || !dependants.length) {
-            // this is rather no error!?
-            console.warn(key + ' was cached but has no dependants/subscribers');
-            console.trace();
-            return;
-        }
-        for(i=dependants.length-1;i>=0;i--) {
-            if(!dependants[i])
-                continue;
-            callback = dependants[i][0];
-            data = dependants[i][1];
-            // callback may be undefined because of offPropertyChange
-            if(callback instanceof Function)
-                callback(data);
-            else if(callback instanceof Array)
-                // callback = [object, 'methodName']
-                // this is done to avoid to many new bound functions
-                callback[0][callback[1]](data);
-            // can be removed when everything works
-            // this checks if the depandant does invalidate itself propperly
-            assert(!(i in dependants), 'dependant should have used offPropertyChange');
-        }
-        delete this._dependants[key];
-    };
-
-    // a dependency on cache would subscribe to this for a key
-    // TODO: find  a new name
-    //            onDependencyInvalidation(key, callback)
-    // the subscription will be undone after being called once
-    _p.onPropertyChange = function(key, callback, data) {
-        var dependants = this._dependants[key]
-          , subscriberID
-          ;
-        if(!dependants)
-            dependants = this._dependants[key] = [];
-        subscriberID = dependants.length;
-        dependants.push([callback, data]);
-        return subscriberID;
-    };
-
-    // TODO: with a globally unique subscriberID we may get rid of key, here
-    _p.offPropertyChange = function(key, subscriberID) {
-        var dependants = this._dependants[key];
-        if(!dependants || !dependants[subscriberID]) {
-            // FIXME: isnt it an error when somone wishes to unsubscribe,
-            // but there is no description???
-            // seems like the  !dependants[subscriberID] case happens when
-            // invalidateCache is calling the subscribers. Then it pop off
-            // the callbacks from dependants and calls their callback === their invalidateCache
-            // method. first thing they do is trying to unsubscribe from their caller ...
-            // we could allow this to happen or think about how this could
-            // be prevented (to produce a better definition of what should happen)
-            throw new Error('unsubscription without subscription, this shouldn\'t happen, I think');
-            //return;
-        }
-        // don't use splice, it would change the indexes and thus
-        // invalidate the other subscriberIDs
-        delete dependants[subscriberID];
-    };
-
 
     /**
      * Get a cps ParameterValue from the _rules

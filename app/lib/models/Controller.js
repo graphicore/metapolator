@@ -80,14 +80,15 @@ define([
                                         parameterCollection.rules, element)
           ;
         if(!this._elementsForRule[ruleName]) {
-            this._elementsForRule[ruleName] = [];
             // subscribe only once, this saves calling us a lot of handlers
             // for each styledict
-            parameterCollection.on('structural-change', [this, 'updateRule'], [ruleName]);
+            // we are currently not unsubscribing...
+            var subscriptionID = parameterCollection.on('structural-change', [this, 'updateRule'], ruleName);
+            this._elementsForRule[ruleName] = [subscriptionID, []];
         }
         styleDict = new this.StyleDict(this, rules, element)
         this._styleDicts[element.nodeID] = styleDict;
-        this._elementsForRule[ruleName].push(element.nodeID);
+        this._elementsForRule[ruleName][1].push(element.nodeID);
         return styleDict;
     }
 
@@ -104,7 +105,7 @@ define([
      * Update each styleDict that uses the rule called `ruleName`
      */
     _p.updateRule(ruleName) {
-        var ids = this._elementsForRule[ruleName]
+        var ids = this._elementsForRule[ruleName][1]
           , parameterCollection, allRules, styleDict, rules
           ;
         if(!ids) return;

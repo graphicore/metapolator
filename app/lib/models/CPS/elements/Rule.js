@@ -1,9 +1,14 @@
 define([
-    './_Node'
+    'metapolator/errors'
+  , './_Node'
 ], function(
-    Parent
+    errors
+  , Parent
 ) {
     "use strict";
+
+    var ValueError = errors.Value;
+
     /**
      * The container for selectors and parameters.
      */
@@ -39,12 +44,9 @@ define([
 
     _p.setSelectorList = function(selectorList) {
         if(selectorList.invalid)
-            // FIXME return [false, message] || throw InvalidError(selectorList.message)?
-            return;
+            throw new ValueError('Trying to set an invalid selectorList: ' + selectorList);
         this._selectorList = selectorList;
-        // this triggers change only when selectorList is replaced
-        // the this._parameters will trigger changes itself!.
-        this.trigger('selector-change');
+        this._trigger('selector-change');
     }
 
     Object.defineProperty(_p, 'parameters', {
