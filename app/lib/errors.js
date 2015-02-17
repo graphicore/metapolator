@@ -47,6 +47,7 @@ define(function() {
     makeError('MOM', undefined , new errors.Error);
     makeError('NotImplemented', undefined , new errors.Error);
     makeError('Deprecated', undefined , new errors.Error);
+    makeError('AbstractInterface', undefined , new errors.Error);
     makeError('CPS', undefined , new errors.Error);
     makeError('Key', undefined , new errors.Error);
     makeError('CPSRegistryKey', undefined , new errors.Key);

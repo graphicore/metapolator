@@ -17,13 +17,13 @@ define([
         if(name)
             this._name = name;
     }
-    var _p = AtRuleCollection.prototype = Object.create(Parent.prototype)
+    var _p = AtRuleCollection.prototype = Object.create(Parent.prototype);
     _p.constructor = AtRuleCollection;
 
     _p.toString = function() {
         return ['@', this._name ? this.name : 'name_not_set',
-                ' {\n', this._items.join('\n\n'),'\n}'].join('')
-    }
+                ' {\n', this._items.join('\n\n'),'\n}'].join('');
+    };
 
     /**
      * Due to the way the parsing is done, name can be set after
@@ -47,7 +47,7 @@ define([
                 throw new CPSError('Name not set yet.');
             return this._name.name;
         }
-    })
+    });
 
     return AtRuleCollection;
-})
+});

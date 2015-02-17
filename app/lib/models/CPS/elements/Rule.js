@@ -18,12 +18,18 @@ define([
         this._parameters = parameterDict;
     }
 
-    var _p = Rule.prototype = Object.create(Parent.prototype)
+    var _p = Rule.prototype = Object.create(Parent.prototype);
     _p.constructor = Rule;
 
     _p.toString = function() {
         return [this._selectorList, ' ', this._parameters].join('');
-    }
+    };
+
+    Object.defineProperty(_p, 'invalid', {
+        get: function(){
+            return this._selectorList.invalid;
+        }
+    });
 
     /**
      * If no namespaces are provided, the result of this method equals
@@ -40,18 +46,18 @@ define([
                     selectorList = namespaces[i].multiply(selectorList);
         }
         return selectorList;
-    }
+    };
 
     _p.setSelectorList = function(selectorList) {
         if(selectorList.invalid)
             throw new ValueError('Trying to set an invalid selectorList: ' + selectorList);
         this._selectorList = selectorList;
         this._trigger('selector-change');
-    }
+    };
 
     Object.defineProperty(_p, 'parameters', {
         get: function(){ return this._parameters; }
-    })
+    });
 
     return Rule;
-})
+});

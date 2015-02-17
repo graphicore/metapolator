@@ -1,13 +1,17 @@
 define([
     'metapolator/errors'
-  , './cpsGetters'
+  , './whitelistProxies'
   , 'metapolator/memoize'
   , 'metapolator/models/emitterMixin'
+  , 'metapolator/models/MOM/_MOMNode'
+  , 'metapolator/models/CPS/SelectorList'
 ], function(
     errors
-  , cpsGetters
+  , whitelistProxies
   , memoize
   , emitterMixin
+  , _MOMNode
+  , SelectorList
 ) {
     "use strict";
 
@@ -58,7 +62,7 @@ define([
             }
           , query: function(node, selector){
                 var result = node.query(selector);
-                self._subscribeTo(self, key);
+                self._subscribeTo(self, selector);
             }
           , genericGetter: function(item, key){
                 return self._genericGetter(item, key);
@@ -88,7 +92,7 @@ define([
         //
         // triggered on "change" and "delete" (also on "add" but we subscribe later)
         //
-        // cache_key refers to the same name here and in the parameterDict
+        // cache_key refers to the same key here and in the parameterDict
         // {
         //    cache_key: [parameterDict, subscriptionUid] /* information needed to unsubscribe */
         // }
@@ -145,7 +149,7 @@ define([
                 // of item.query(key); then, the SubscriptionUid must be
                 // different for different selectors. Until then all selectors
                 // for a _MOMNode have the same SubscriptionUid:
-                return item.nodeID + 'S:$'// + key
+                return item.nodeID + 'S:$';// + key
             else
                 return item.nodeID + ':' + key;
         }
@@ -161,7 +165,7 @@ define([
     };
 
     _p._subscribeTo = function(item, key) {
-        var subscriberID
+        var subscriberId
           , subscriptionUid = this._getSubscriptionUID(item, key)
           , current = this._getting.current
           , dependencies = this._cacheSubscriptions[subscriptionUid]
@@ -173,6 +177,9 @@ define([
                 // we don't do MOM tree changes anyways.
                 assert(item instanceof _MOMNode, 'When "key" is a Selector "item" must be a MOM Element.');
                 subscriberId = item.onSubtreeChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
+
+                TODO: make _MOMNode.onSubtreeChange
+                      and any *.cps_proxy.onPropertyChange
             }
             else {
                 subscriberId = item.onPropertyChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
@@ -184,7 +191,7 @@ define([
             // that cache already subscribed to item.key
             return;
         dependencies[2][current] = true;//index
-        dependencies[3 += 1;// counter
+        dependencies[3] += 1;// counter
 
         if(!this._cacheDependencies[current])
             this._cacheDependencies[current] = [];
@@ -206,7 +213,7 @@ define([
         // the cache is now invalidated, the dependencies can be unsubscribed
         var dependencies = this._cacheDependencies[key]
           , subscriptionUid
-          , subscriptions
+          , subscription
           , i, l
           ;
         if(!dependencies)
@@ -256,8 +263,8 @@ define([
             // that is the original source of this item must be subscribed and =
             // fire if item changes...
             // it is probably happening in __get anyways, like this
-            // cpsGetters.whitelist(this.element, name);
-            // and then a this._subscribeTo(this.element, name)
+            // cpsGetters.whitelist(this.element, key);
+            // and then a this._subscribeTo(this.element, key)
             // REMEMBER: this code was extracted from a merge of
             // cpsGetters.generic plus cpsGetters.whitelist
             // so, in the best case, we wouldn't use this condition at all,
@@ -311,9 +318,9 @@ define([
         var i, l, subscription;
         this._rules = rules;
 
-        for(i=0;l=this._dictSubscriptions.length;i<l;i++) {
+        for(i=0,l=this._dictSubscriptions.length;i<l;i++) {
             subscription = this._dictSubscriptions[i];
-            subscription[0].off(subscriptionp[1]);
+            subscription[0].off(subscription[1]);
         }
         this._rebuildIndex();
     };
@@ -353,7 +360,7 @@ define([
                         + ' key: ' + key
                         + ' channel: ' + channelKey);
         this._setDictValue(this._rules[index], key, index);
-    }
+    };
 
     _p._setDictValue = function(parameters, key, parametersIndex) {
         assert(!(key in this._propertySubscriptions), 'there may be no dependency yet!');
@@ -372,7 +379,7 @@ define([
     };
 
     /**
-     *  remake the this._dict entry for name
+     *  remake the this._dict entry for key
      */
     _p._updateDictEntry = function(key) {
         var i, l, parameters;
@@ -386,7 +393,6 @@ define([
             break;
         }
     };
-
 
     _p._paramerChangeHandler = function(parameters, key, eventData) {
         switch(eventData) {
@@ -404,10 +410,10 @@ define([
                 throw new ReceiverError('Expected an event of "change" or '
                                        + '"delete" but got "'+eventData+'"');
         }
-    }
+    };
 
     /**
-     *  if name is in cache, invalidate the cache and inform all subscribers/dependants
+     *  if key is in cache, invalidate the cache and inform all subscribers/dependants
      */
     _p._invalidateCache = function(key) {
         // FIXME: _p.get should not be called while this is running!
@@ -434,30 +440,30 @@ define([
     /**
      * Get a cps ParameterValue from the _rules
      * This is needed to construct the instance of the Parameter Type.
-     * Returns Null if the name is not defined.
+     * Returns Null if the key is not defined.
      */
-    _p._getCPSParameterValue = function(name) {
+    _p._getCPSParameterValue = function(key) {
         if(!this._dict) this._buildIndex();
-        return (name in this._dict) ? this._dict[name] : null;
+        return (key in this._dict) ? this._dict[key] : null;
     };
 
     /**
-     * Return a new instance of ParameterValue or null if the name is not defined.
+     * Return a new instance of ParameterValue or null if the key is not defined.
      */
-    _p._getParameter = function(name) {
-        var cpsParameterValue = this._getCPSParameterValue(name);
+    _p._getParameter = function(key) {
+        var cpsParameterValue = this._getCPSParameterValue(key);
         if(cpsParameterValue === null)
             return null;
-        return cpsParameterValue.factory(name, this.element, this.getAPI);
+        return cpsParameterValue.factory(key, this.element, this.getAPI);
     };
 
-    _p.__get = function(name, errors) {
-        var param = this._getParameter(name)
+    _p.__get = function(key, errors) {
+        var param = this._getParameter(key)
           , result
           ;
         if(param)
            return param.getValue();
-        errors.push(name + ' not found for ' + this.element.particulars);
+        errors.push(key + ' not found for ' + this.element.particulars);
         // FIXME: prefer the following, then the cpsGetters module can be removed!
         // if that is not possible, it's certainly interesting why
         result = this.element.cps_proxy[key];
@@ -470,37 +476,37 @@ define([
      * Look up a parameter in this.element according to the following
      * rules:
      *
-     * 1. If `name' is "this", return the MOM Element of this StyleDict
+     * 1. If `key' is "this", return the MOM Element of this StyleDict
      * (this.element). We check "this" first so it can't be overridden by
      * a @dictionary rule.
      *
-     * 2. If `name' is defiened in CPS its value is returned.
+     * 2. If `key' is defiened in CPS its value is returned.
      *
-     * 3. If name is available/whitelisted at this.element, return that value.
+     * 3. If key is available/whitelisted at this.element, return that value.
      *
      * 4. throw KeyError.
      *
-     * If `name' is a registered parameter type, the return value's type is
+     * If `key' is a registered parameter type, the return value's type is
      * the parameter type or an error will be thrown;
      * Otherwise, the return value may be anything that is accessible
      * or constructable from CPS formulae, or a white-listed value on
      * any reachable element.
      */
-    _p._get = function(name) {
+    _p._get = function(key) {
         var errors = [];
-        if(name === 'this')
+        if(key === 'this')
             return this.element;
 
         // Detect recursion on this.element
-        if(name in this._getting.recursionDetection)
-            throw new CPSRecursionError('Looking up "' + name
+        if(key in this._getting.recursionDetection)
+            throw new CPSRecursionError('Looking up "' + key
                             + '" is causing recursion in the element: '
                             + this.element.particulars);
-        this._getting.recursionDetection[name] = true;
+        this._getting.recursionDetection[key] = true;
         this._getting.stack.push(this._getting.current);
-        this._getting.current = name;
+        this._getting.current = key;
         try {
-            return this.__get(name, errors);
+            return this.__get(key, errors);
         }
         catch(error) {
             if(!(error instanceof KeyError))
@@ -509,21 +515,21 @@ define([
             throw new KeyError(errors.join('\n----\n'));
         }
         finally {
-            delete this._getting.recursionDetection[name];
+            delete this._getting.recursionDetection[key];
             this._getting.current = this._gettingStack.pop();
         }
     };
     // FIXME: memoize seems to be slower, can we fix it?
     //_p.get = memoize('get', _p._get);
-    _p.get = function(name) {
+    _p.get = function(key) {
         // FIXME: remove this if everything behaves right
         // this error should never occur...
         if(this._invalidating)
             throw new Error('this is invalidating, so get is illegal');
 
-        var val = this._cache[name];
+        var val = this._cache[key];
         if(val === undefined)
-            this._cache[name] = val = this._get(name);
+            this._cache[key] = val = this._get(key);
         return val;
     };
 

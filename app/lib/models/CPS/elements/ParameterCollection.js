@@ -4,15 +4,19 @@ define([
   , './AtRuleName'
   , './SelectorList'
   , './Rule'
+  , './Comment'
 ], function(
     errors
   , Parent
   , AtRuleName
   , SelectorList
   , Rule
+  , Comment
 ) {
     "use strict";
-    var CPSError = errors.CPS;
+    var CPSError = errors.CPS
+      , ValueError = errors.Value
+      ;
     /**
      * A list of Rule, ParameterCollection (also @namespace, @import) and
      * Comment Elements
@@ -42,10 +46,11 @@ define([
         // probably won't need to call the destroy method
         // but maybe this becomes interesting when the ui displays this
         // data structure
-        // items = this._items;
-        // this._items = null;
-        // for(var i=0,l=items.length;i<l;i++)
-        //     items[i].destroy();
+        // uncomment calls to destroy everywhere???
+        var items = this._items, i, l;
+        this._items = null;
+        for(i=0,l=items.length;i<l;i++)
+            items[i].destroy();
 
         // reset all own, enumerable, configurable properties
         Object.keys(this).forEach(function(key) {
@@ -62,24 +67,27 @@ define([
         return this._items.join('\n\n');
     };
 
-    // FIXME/TODO: add item/ remove item functionality!
-    // items that are important for cache invalidations are:
-    // Rules, @namespace, @import ... the latter two can maybe be handled
-    // just as ParameterCollection so enhancing is easier
-    // maybe a Array.prototype.slice like interface is best, as it can do
-    // inserting and removing.
-    // a remove(indexes) would be nice as well, however.
+    /**
+     * subclasses of this will have to overide this definition
+     */
+    Object.defineProperty(_p, 'invalid', {
+        value: false
+    });
 
     function _filterRules(item) {
         return item instanceof Rule;
     }
-    Object.defineProperty(_p, 'rules', {
-        get: function(){return this._items.filter(_filterRules);}
-    })
+
+    /**
+     * for display in the ui
+     */
+    Object.defineProperty(_p, 'items', {
+        get: function(){return this._items.slice();}
+    });
 
     Object.defineProperty(_p, 'length', {
-        get: function(){ return this._items.length }
-    })
+        get: function(){ return this._items.length;}
+    });
 
     Object.defineProperty(_p, 'name', {
         enumerable: true
@@ -106,7 +114,13 @@ define([
     /**
      * this returns all rules that are direct children of this collection
      * AND all rules of ParameterCollection instances that are
-     * direct children of this collection
+     * direct children of this collection, a "flattened" list in the form:
+     * [
+     *    [namespace Selectorlist, Rule]
+     *  , [namespace Selectorlist, Rule]
+     *  , ...
+     * ]
+     *
      */
     Object.defineProperty(_p, 'rules', {
         get: function() {
@@ -117,7 +131,7 @@ define([
     });
 
     /**
-     *  invalidate the cache on the right occasions,
+     * invalidate the cache on the right occasions,
      * This are events that imply:
      *  -- That a child rule changed its SelectorList
      *  -- That this AtNamespaceCollection changed its SelectorList (right???)
@@ -131,19 +145,20 @@ define([
         var i,l, subscription;
         this._rules = null;
         this._unsubscribeAll();
-    }
+    };
 
     _p._subscribe = function(item, channel, callback, data) {
         var subscriptionID = item.on(channel, callback, data);
-        this._rulesCacheSubscriptions.push(item, subscriptionID);
-    }
+        this._rulesCacheSubscriptions.push([item, subscriptionID]);
+    };
     _p._unsubscribeAll = function() {
+        var i, l, subscription;
         for(i=0,l=this._rulesCacheSubscriptions.length;i<l;i++) {
             subscription = this._rulesCacheSubscriptions[i];
             subscription[0].off(subscription[1]);
         }
         this._rulesCacheSubscriptions = [];
-    }
+    };
 
     _p._structuralChangeHandler = function(data, channelName, eventData) {
         this._unsetRulesCache();
@@ -157,21 +172,22 @@ define([
           , item, rule
           , selectorList
           , callback = [this, '_structuralChangeHandler']
-          , channel = 'selector-change'
+          , ruleChannel = 'selector-change'
           , collectionChannel = 'structural-change'
           ;
         for(i=0, l=this._items.length;i<l;i++) {
             item = this._items[i];
             if(item instanceof Rule) {
                 this._subscribe(item, ruleChannel, callback);
-                selectorList = item.getSelectorList();
-                if(! selectorList.selects ) continue;
+                if(item.invalid) continue;
                 // 0: array of namespaces, initially empty
                 // 1: the instance of Rule
                 // thus: [selectorList, rule, [_Collections where this rule is embeded]]
-                rules.push([ selectorList, item, [this] ]);
+                rules.push([ item.getSelectorList(), item, [this] ]);
             }
             else if(item instanceof ParameterCollection) {
+                this._subscribe(item, collectionChannel, callback);
+                if(item.invalid) continue;
                 childRules = item.rules;
                 for(j=0,ll=childRules.length;j<ll;j++) {
                     rule = childRules.rules[j];
@@ -181,10 +197,73 @@ define([
                     rule[2].push(this);
                     rules.push(rule);
                 }
-                this._subscribe(item, collectionChannel, callback);
             }
         }
         return rules;
+    };
+
+
+    function _checkItem(item) {
+        return (
+                (item instanceof Rule && !item.invalid)
+             || (item instanceof ParameterCollection && !item.invalid)
+             || item instanceof Comment
+        );
+    }
+    /**
+     * One to rule them all:
+     *
+     * insert a Rule (which must have a valid SelectorList)
+     * remove a Rule
+     * replace a rule
+     * Add/remove @namespace (with valid SelectorList) or @import
+     * Add/remove comments
+     * Remove invalid hunks of data. <= just don't allow inserting invalid hunks
+     *
+     * all is done with Array.prototype.splice
+     * see: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/splice
+     *
+     * emits:
+     *      "delete" if there where deletions
+     *      "add" if there where insertion
+     *      "structural-change" if there where insertion or deletions
+     */
+    _p.splice = function(startIndex, deleteCount, _insertions /* single item or array of items */) {
+        var insertions = _insertions instanceof Array
+            ? _insertions
+            : [_insertions]
+          , deleted
+          , args
+          , i, l
+          , item
+          , events = []
+          ;
+        for(i=0,l=insertions.length;i<l; i++) {
+            item = insertions[i];
+            if(!_checkItem(item))
+                throw new ValueError('Trying to insert an invalid item: ' + item);
+        }
+
+        args = [startIndex, deleteCount];
+        Array.prototype.push.apply(args, insertions);
+        deleted = Array.prototype.splice.apply(this._items, args);
+        for(i=0,l=deleted.length;i<l;i++)
+            deleted[i].destroy();
+        if(deleted.length)
+            events.push('delete');
+        if(insertions.length)
+            events.push('add');
+        if(!events.length)
+            // nothing happened
+            return;
+        events.push('structural-change');
+        // TODO: Add maybe information like three numbers:
+        //      index, deletedCount, insertedCount
+        // That could help to update the ui, however, usually a ui is not
+        // that delicate!.
+        // NOTE: index and deletedCount must be calculated see the
+        // docs for Array.prototype.slice
+        this.trigger(events);
     };
 
     return ParameterCollection;

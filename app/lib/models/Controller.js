@@ -33,8 +33,11 @@ define([
         this._univers = new Univers();
         this._MOM.add(this._univers);
 
-        this._styleDicts = Object.create(null);// element.nodeID: styleDict
-        this._elementsForRule = Object.create(null); // {ruleName:[element.nodeIDs, ...];
+        // {element.nodeID: styleDict}
+        this._styleDicts = Object.create(null);
+
+        // {ruleName:[parameterCollection, subscriptionID, [element.nodeIDs, ...]]}
+        this._rules = Object.create(null);
     }
 
     var _p = Controller.prototype;
@@ -75,20 +78,30 @@ define([
         var ruleName = element.master
                     ? this._getMasterRule(element.master.id)
                     : 'global.css'
-          , parameterCollection = this._ruleController.getRule(false, ruleName)
-          , rules = this._selectorEngine.getMatchingRules(
-                                        parameterCollection.rules, element)
+          , parameterCollection
+          , subscriptionID
+          , rules
           ;
-        if(!this._elementsForRule[ruleName]) {
+        if(!this._rules[ruleName]) {
             // subscribe only once, this saves calling us a lot of handlers
             // for each styledict
-            // we are currently not unsubscribing...
-            var subscriptionID = parameterCollection.on('structural-change', [this, 'updateRule'], ruleName);
-            this._elementsForRule[ruleName] = [subscriptionID, []];
+            // we are currently not unsubscribing, becuause we don't
+            // unload parameterCollections ever.
+            // TODO: unload parameterCollections if they are not used anymore.
+            //       Probably add a reference counter for that. Maybe this
+            //       is better done in _ruleController. The unsubscription
+            //       here could happen on('destroy');
+            parameterCollection = this._ruleController.getRule(false, ruleName)
+            subscriptionID = parameterCollection.on('structural-change', [this, '_updateRule'], ruleName);
+            this._rules[ruleName] = [parameterCollection, subscriptionID, []];
         }
+        else
+            parameterCollection = this._rules[ruleName][0];
+        rules = this._selectorEngine.getMatchingRules(
+                                        parameterCollection.rules, element);
         styleDict = new this.StyleDict(this, rules, element)
         this._styleDicts[element.nodeID] = styleDict;
-        this._elementsForRule[ruleName][1].push(element.nodeID);
+        this._rules[ruleName][2].push(element.nodeID);
         return styleDict;
     }
 
@@ -100,16 +113,14 @@ define([
         return this._styleDicts[element.nodeID] || this._getComputedStyle(element);
     }
 
-
     /**
      * Update each styleDict that uses the rule called `ruleName`
      */
-    _p.updateRule(ruleName) {
-        var ids = this._elementsForRule[ruleName][1]
-          , parameterCollection, allRules, styleDict, rules
+    _p._updateRule(ruleName) {
+        var ids = this._rules[ruleName][2]
+          , parameterCollection = this._rules[ruleName][0]
+          , allRules, styleDict, rules
           ;
-        if(!ids) return;
-        parameterCollection = this._ruleController.getRule(false, ruleName);
         allRules = parameterCollection.rules;
         for(i=0,l=ids.length;i<l;i++) {
             styleDict = this._styleDicts[ ids[i] ];

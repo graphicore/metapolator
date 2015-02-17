@@ -66,7 +66,7 @@ define([
         emitterMixin.init(this, propertyChangeEmitterSetup);
     }
 
-    var _p = ParameterDict.prototype = Object.create(Parent.prototype)
+    var _p = ParameterDict.prototype = Object.create(Parent.prototype);
     _p.constructor = ParameterDict;
 
     emitterMixin(_p, propertyChangeEmitterSetup);
@@ -74,9 +74,9 @@ define([
     _p.toString = function() {
         var prepared = this._items.map(function(item) {
             if(!item)
-                return ''
+                return '';
             if(item instanceof GenericCPSNode)
-                return ['    ', item, ';'].join('')
+                return ['    ', item, ';'].join('');
             return '    ' + item;
         });
 
@@ -91,18 +91,29 @@ define([
 
     Object.defineProperty(_p, 'items', {
         get: function() {
-            var _items = this._items, items = [], i, l, item;
-            for(i=0,l=this._items.length;i<l;i++)
-                if(_filterParameters(item = _items[i]))
-                    items.push(item);
-            return items;
+            return this._items.slice();
         }
     });
 
-    // FIXME: maybe this should be deprecated, it's expensive
-    // also, this.items could be cached, maybe
+    /**
+     * dictionary of active items:
+     * {
+     *      key: itemValue
+     * }
+     */
+    Object.defineProperty(_p, 'dict', {
+        get: function() {
+            if(!this._keys)
+                this._buildIndex();
+            var result = Object.create(null), k, dict = this._dict;
+            for(k in dict)
+                result[k] = this.getItemValue(dict[k]);
+            return result;
+        }
+    });
+
     Object.defineProperty(_p, 'length', {
-        get: function(){ return this.items.length; }
+        get: function(){ return this._items.length; }
     });
 
     _p._buildIndex = function() {
@@ -130,17 +141,16 @@ define([
         }
     };
 
-    // FIXME: for an api it would be easier to neglegt the inner data-structure
-    // and just make it possible to work with the currently active entries
-    // maybe we can implement that and then another set of calls that makes
-    // the items array accessible
-    // There will be probably one API for a dict like access and another
-    // one for array access.
+    // FIXME: add a splice API
+    // it's good for a more complex ui
 
     /**
+     * replace or add
      * overide the active item or create new entry
+     *
+     * emits: "add", "change" or nothing
      */
-    _p.setParameter(item) = function {
+    _p.setParameter = function(item) {
         var key = item.name
           , items = this._items
           , index
@@ -152,7 +162,7 @@ define([
         if(!this.has(key)) {
             event = 'add';
             index = items.length;
-            items.push(key);
+            items.push(item);
             if(!this._indexes[key])
                 this._indexes[key] = [];
             this._indexes[key].push(index);
@@ -161,19 +171,23 @@ define([
         else {
             event = 'change';
             index = this._dict[key];
-            old = items[index]
-            items[index] = parameter;
+            old = items[index];
+            items[index] = item;
         }
         this._dict[key] = index;
         // emit events
         if(old) old.destroy();
         this._trigger(event, key);
         this._triggerPropertyChange(key, event);
-    }
+    };
 
-    // remove all items with key as name
-    // return number of removed items
-    _p.erase(key) {
+    /**
+     * Remove all items with key as name (valid, invalid, active, inactive)
+     * return number of removed items
+     *
+     * emits: ["delete", "erase"], "erase" or nothing
+     */
+    _p.erase = function(key) {
         var count = 0, indexes, i
           , items = this._items
           , removed
@@ -187,7 +201,7 @@ define([
             return 0;
         removed = [];
         count = indexes.length;
-        delete this._indexes[key];
+        delete indexes[key];
         for(i=0;i<count;i++) {
             // returns an array with the deleted elements
             // since we delete always only one item [0].destroy(); is good
@@ -206,16 +220,21 @@ define([
 
         for(i=0;i<count;i++)
             removed[i].destroy();
-        this._trigger(event, key)
+        this._trigger(event, key);
         if(deleteEvent)
             this._triggerPropertyChange(key, 'delete');
         return count;
-    }
+    };
 
-    // delete the currently active item for key, if there is an active item
+    /**
+     * Remove/delete the currently active item for key.
+     * May make another valid parameter with the same name active,
+     * if there is any.
+     *
+     * emits: "change" or "delete" or noting
+     */
     _p.removeCurrentActiveParameter = function(key) {
         // return number of removed items
-        // FIXME: maybe if there is an active key left is also interesting
         var indexes, index, i
           , items = this._items
           , old
@@ -256,12 +275,12 @@ define([
         this._trigger(event, key);
         this._triggerPropertyChange(key, event);
         return 1;
-    }
+    };
 
     _p.keys = function() {
         if(!this._keys)
             this._buildIndex();
-        return this._keys;
+        return this._keys.slice();
     };
 
     _p.get = function(key) {
@@ -281,16 +300,7 @@ define([
     _p.find = function(key) {
         if(!this._dict)
             this._buildIndex();
-        return this._indexes[key] || [];
-        //var items = this.items
-        //  , i = 0
-        //  , indexes = []
-        //  ;
-        //for(;i<items.length;i++) {
-        //    if(key === items[i].name);
-        //        indexes.push(i);
-        //}
-        //return indexes;
+        return this._indexes[key].slice() || [];
     };
 
     _p.getItemValue = function(index) {
