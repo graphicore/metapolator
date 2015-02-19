@@ -89,9 +89,8 @@ define([
             }]
             // value: this['parent'][S"point.top"]
           , ['*unboxed+getAPI*', _MOMNode, SelectorList, function(getAPI, node, selector) {
-                var result = node.query(selector);
-                // FIXME: do maybe this:
-                var result = getAPI.query(node, selector); // internally node.query(selector); but with subscription
+                // internally does node.query(selector); but with dependency subscription
+                var result = getAPI.query(node, selector);
                 if(!result)
                     throw new CPSFormulaError('Not found: an element for '
                                         + selector + ' '
@@ -100,7 +99,7 @@ define([
                 return result;
             }]
           , ['*unboxed+getAPI*','*anything*', ['number', 'string'], function(getAPI, item, key) {
-                return getApi.genericGetter(item, key);
+                return getAPI.genericGetter(item, key);
             }]
         ])
         /**
@@ -119,19 +118,21 @@ define([
       , new Operator(':', true, Infinity, 1, 1, [
             ['*getAPI*', NameToken, NameToken, function(getAPI, name, key) {
                 var item = getAPI.get(name.getValue());
-                return getApi.genericGetter(item, key.getValue());
+                if(!item)
+                    console.log('item:', item, 'from', '"'+name.getValue()+'"', 'key:', '"'+key.getValue()+'"');
+                return getAPI.genericGetter(item, key.getValue());
             }]
           , ['*getAPI*', SelectorList, NameToken, function(getAPI, selector, key) {
                 // SelectorList selects from global scope, aka multivers
-                var item = getAPI.get('this').multivers.query(selector);
+                // var item = getAPI.get('this').multivers.query(selector);
                 // FIXME: do instead
                 // var item = getAPI.query(getAPI.get('this').multivers, selector); // internally node.query(selector); but with subscription
 
-                // is some form of subscription needed for node.multiverse???
+                // is some form of subscription needed for node.multivers???
                 // maybe in the future, we will allow transports from one
-                // multivers to another, then host.multiverse can change
+                // multivers to another, then host.multivers can change
                 var host = getAPI.get('this')
-                  , node = getAPI.genericGetter(host, 'multiverse')
+                  , node = getAPI.genericGetter(host, 'multivers')
                   , item = getAPI.query(node, selector)
                   ;
 
@@ -139,10 +140,10 @@ define([
                 if(!item)
                     throw new CPSFormulaError('Not found: an element for '
                                                         + selector);
-                return getApi.genericGetter(item, key.getValue());
+                return getAPI.genericGetter(item, key.getValue());
             }]
           , ['*getAPI*', '*anything*', NameToken, function(getAPI, item, key) {
-                return getApi.genericGetter(item, key.getValue());
+                return getAPI.genericGetter(item, key.getValue());
             }]
         ])
         /**
@@ -320,6 +321,7 @@ define([
          * This doesn't change the result of the calculation.
          */
       , new Operator('_print', false, Infinity, 0, 1, function(arg) {
+            /*global console*/
             console.log('cps _print: "' +arg +'" typeof', typeof arg
                                                     , 'object: ', arg);
             return arg;
@@ -369,14 +371,15 @@ define([
      */
     engine.setFinalizeMethod(function(result, getAPI) {
         if(result instanceof NameToken)
-            return getAPI(result.getValue());
-        else if(result instanceof SelectorList)
-            // FIXME:
-            // var host = getAPI.get('this'),
-            //   , node = getAPI.genericGetter(host, 'multiverse')
-            //   ;
-            // return getAPI.query(node, result);
-            return getAPI.get('this').multivers.query(result);
+            return getAPI.get(result.getValue());
+        else if(result instanceof SelectorList) {
+            var host = getAPI.get('this') // this can\'t be overidden by cps
+              , node = getAPI.genericGetter(host, 'multivers')
+              ;
+            return getAPI.query(node, result);
+            // old, not fully subscribed:
+            // return getAPI.get('this').multivers.query(result);
+        }
         else if(result instanceof _Token)
             // maybe one day we allow stuff like operators as first class
             // values, but not now.

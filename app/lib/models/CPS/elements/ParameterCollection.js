@@ -1,14 +1,12 @@
 define([
     'metapolator/errors'
   , './_Node'
-  , './AtRuleName'
   , './SelectorList'
   , './Rule'
   , './Comment'
 ], function(
     errors
   , Parent
-  , AtRuleName
   , SelectorList
   , Rule
   , Comment
@@ -23,9 +21,7 @@ define([
      */
     function ParameterCollection(items, source, lineNo) {
         Parent.call(this, source, lineNo);
-        this._items = [];
-        if(items.length)
-            Array.prototype.push.apply(this._items, items);
+        this._items = items.slice();
 
         this._name = null;
         this._rules = null;
@@ -58,7 +54,7 @@ define([
                 delete this[key];
         }, this);
 
-        this.constructor.apply(this, Array.prototype.slice.call(arguments));
+        this.constructor.apply(this, arguments);
         // the collection changed most probably
         this._trigger('structural-change');
     };
@@ -92,21 +88,21 @@ define([
     Object.defineProperty(_p, 'name', {
         enumerable: true
       , get: function() {
-            return (this._name ? this._name.name : null);
+            return (this._name ? this._name : null);
         }
       , set: function(name) {
             if(this._name !== null)
-                throw new CPSError('Name is already set');
+                throw new CPSError('Name is already set: ' + this._name);
             if(name === undefined) {
                 this._name = undefined;
                 return;
             }
-            else if(!(name instanceof AtRuleName))
+            else if(typeof name !== 'string')
                 throw new CPSError('Name has the wrong type, expected '
-                    + 'AtRuleName but got: '
-                    + (name.constructor.name
+                    + 'string but got: '
+                    + (name.constructor
                         ? name.constructor.name
-                        : name.constructor));
+                        : name + ' typeof: ' + (typeof name)));
             this._name = name;
         }
     });
@@ -174,6 +170,7 @@ define([
           , callback = [this, '_structuralChangeHandler']
           , ruleChannel = 'selector-change'
           , collectionChannel = 'structural-change'
+          , copyRules
           ;
         for(i=0, l=this._items.length;i<l;i++) {
             item = this._items[i];
@@ -183,19 +180,37 @@ define([
                 // 0: array of namespaces, initially empty
                 // 1: the instance of Rule
                 // thus: [selectorList, rule, [_Collections where this rule is embeded]]
-                rules.push([ item.getSelectorList(), item, [this] ]);
+                rules.push([ item.getSelectorList(), item])//, [this] ]);
             }
             else if(item instanceof ParameterCollection) {
                 this._subscribe(item, collectionChannel, callback);
-                if(item.invalid) continue;
+                if(item.invalid)
+                    continue;
                 childRules = item.rules;
+                // rules of @import are copied, because they are reused
+                // in other collections as well. @namespace changes the
+                // rule array, for example, that changes all other instances
+                // of that rule array as well. So, rule arrays that are reused
+                // must be copied, this is currently only true for
+                // @import
+                // NOTE: this is also caused partly by the `this._rules`
+                // cache. Thus a possible solution would be to not use
+                // caches for some types of ParameterCollection. @import
+                // could, instead of returning the proxied value, return
+                // a copy of it's _reference rules.
+                // @namespace, on the other hand, needs no cache in principle
+                // becuase the important cache is the plain ParameterCollection
+                // that contains the @namespace ...
+                copyRules = (item.name === 'import');
+                if(!childRules)
+                    console.log('no rules from:', item.name, item.constructor.name);
                 for(j=0,ll=childRules.length;j<ll;j++) {
-                    rule = childRules.rules[j];
+                    rule = childRules[j];
                     // add `this` to the third entry to produce a history
                     // of nested ParameterCollections, this is to show
                     // in the the ui where this rule comes from
-                    rule[2].push(this);
-                    rules.push(rule);
+                    // rule[2].push(this);
+                    rules.push(copyRules ? rule.slice() : rule);
                 }
             }
         }

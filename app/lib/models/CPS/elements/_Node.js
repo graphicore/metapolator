@@ -27,12 +27,19 @@ define([
         Parent.call(this);
         this._source = source;
         this._lineNo = lineNo;
-        emitterMixin.init(this, _emitterSetup);
+
+        // the `reset` method of ParameterCollection will call this constructor
+        // repeatedly. So we need a way to detect if this is was already
+        // applied or not
+        if(!this.__firstTimeInitFlag) {
+            emitterMixin.init(this, _emitterSetup);
+            Object.defineProperty(this, '__firstTimeInitFlag', {value: true});
+        }
     }
     var _p = _Node.prototype = Object.create(Parent.prototype);
     _p.constructor = _Node;
 
-    emitterMixin(_p);
+    emitterMixin(_p, _emitterSetup);
 
     _p.toString = function() {
         throw new AbstractInterfaceError('This interface is abstract and'

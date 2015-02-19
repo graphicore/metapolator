@@ -106,7 +106,7 @@ define([
         var stateProperty = setup.stateProperty || '_channel';
         if(thisVal.hasOwnProperty(stateProperty))
             throw new EmitterError('The property name "' + stateProperty
-                    + '" is already used by this object (' + this + ').');
+                    + '" is already used by this object (' + thisVal.constructor.name + ': ' + thisVal+').');
         Object.defineProperty(thisVal, stateProperty, {
             value: Object.create(null)
           , writable: false
@@ -138,9 +138,11 @@ define([
     }
     function __off(state, channelKey, subscriberID) {
         var channel = state[channelKey];
-        if(!channel || !channel[subscriberID])
+        if(!channel || !channel[subscriberID]){
+            console.trace();
             throw new EmitterError('Unsubscription without subscription from channel: '
                     + '"' + channelKey + '" with subscriberID: "' + subscriberID + '".');
+            }
         delete channel[subscriberID];
     }
     function __trigger(state, channelKey, eventData) {
@@ -168,10 +170,8 @@ define([
         }
     }
 
-    function _on(stateProperty, channelKey, callback, subscriberData) {
-        /*jshint validthis:true */
+    function _on(state, channelKey, callback, subscriberData) {
         var subscription = [callback, subscriberData]
-          , state = this[stateProperty]
           , i, l, results
           ;
         if(channelKey instanceof Array) {
@@ -184,13 +184,15 @@ define([
     }
     function _mixinOn(stateProperty) {
         return function on(channelKey, callback, subscriberData) {
-            return _on(stateProperty, channelKey, callback, subscriberData);
+            var state = this[stateProperty];
+            if(state === undefined)
+                throw new EmitterError('state "'+stateProperty+'" is undefined.');
+            return _on(state, channelKey, callback, subscriberData);
         };
     }
-    function _off(stateProperty, subscriberID) {
-        /*jshint validthis:true */
-        var state = this[stateProperty], i, l;
-        if(subscriberID instanceof Array) {
+    function _off(state, subscriberID) {
+        var i, l;
+        if(subscriberID[0] instanceof Array) {
             for(i=0,l=subscriberID.length;i<l;i++)
                 __off(state, subscriberID[i][0], subscriberID[i][1]);
             return;
@@ -199,14 +201,18 @@ define([
     }
     function _mixinOff(stateProperty) {
         return function off(subscriberID) {
-            return _off(stateProperty, subscriberID);
+            var state = this[stateProperty];
+            if(state === undefined)
+                throw new EmitterError('state "'+stateProperty+'" is undefined.');
+            return _off(state, subscriberID);
         };
     }
-    function _trigger(stateProperty, channelKey, eventData) {
-        /*jshint validthis:true */
-        var i,l;
+    function _trigger(host, stateProperty, channelKey, eventData) {
+        var i,l, state = host[stateProperty];
+        if(state === undefined)
+            throw new EmitterError('state "'+stateProperty+'" is undefined.');
         if(channelKey instanceof Array) {
-            for(i=0;l=channelKey.length;i++)
+            for(i=0,l=channelKey.length;i<l;i++)
                 __trigger(state, channelKey[i], eventData);
             return;
         }
@@ -214,7 +220,7 @@ define([
     }
     function _mixinTrigger(stateProperty) {
         return function trigger(channelKey, data) {
-            return _trigger(stateProperty, channelKey, data);
+            return _trigger(this, stateProperty, channelKey, data);
         };
     }
 

@@ -3,7 +3,7 @@ define([
   , './curry'
   , './parameterFactories'
   , 'metapolator/models/CPS/elements/Parameter'
-  , 'metapolator/models/CPS/elements/AtRuleCollection'
+//  , 'metapolator/models/CPS/elements/AtRuleCollection'
   , 'metapolator/models/CPS/elements/ParameterCollection'
   , 'metapolator/models/CPS/elements/AtRuleName'
   , 'metapolator/models/CPS/dataTypes/CPSDictionaryEntry'
@@ -13,7 +13,7 @@ define([
   , curry
   , parameterFactories
   , Parameter
-  , AtRuleCollection
+//  , AtRuleCollection
   , ParameterCollection
   , AtRuleName
   , CPSDictionaryEntry

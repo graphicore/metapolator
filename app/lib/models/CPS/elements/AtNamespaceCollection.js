@@ -22,7 +22,6 @@ define([
         this._selectorList = null;
         if(name)
             this.name = name;
-
         if(selectorList)
             this.selectorList = selectorList;
     }
@@ -43,14 +42,6 @@ define([
         }
     });
 
-    Object.defineProperty(_p, 'selectorList', {
-        enumerable: true
-      , set: _p.setSelectorList
-      , get: function() {
-            return this._selectorList;
-        }
-    });
-
     /**
      * Selectorlist may be invalid when it is set initially.
      * This is that the parser can set selectorlist even if it
@@ -62,20 +53,32 @@ define([
      * by a parent ParameterCollection. If there's a problem with this
      * behavior we may change it.
      */
-    _p.setSelectorList = function(selectorList) {
-        if(!(selectorList instanceof SelectorList))
+    function setSelectorList (selectorList) {
+        /*jshint validthis: true*/
+        if(!(selectorList instanceof SelectorList)) {
             throw new CPSError('selectorList has the wrong type, expected '
                 + 'SelectorList but got: '
-                + (selectorList.constructor.name
+                + (selectorList ? (selectorList.constructor.name
                     ? selectorList.constructor.name
-                    : selectorList.constructor));
+                    : selectorList.constructor): selectorList));
+        }
         else if(selectorList.invalid && this._selectorList !== null)
             throw new ValueError('trying to set an invalid selectorList: '+ selectorList);
 
         this._selectorList = selectorList;
         this._unsetRulesCache();
         this._trigger(['selector-change', 'structural-change']);
-    };
+    }
+
+    _p.setSelectorList = setSelectorList;
+
+    Object.defineProperty(_p, 'selectorList', {
+        enumerable: true
+      , set: setSelectorList
+      , get: function() {
+            return this._selectorList;
+        }
+    });
 
     /**
      * Wrapper to add the namespace to the rules returned by
@@ -85,11 +88,20 @@ define([
         var rules, i, l
           , namespace = this.selectorList
           ;
-        if(namespace.invalid)
+        if(namespace.invalid) {
+            console.log('invalid namespace: '+namespace);
             return [];
+        }
         rules = Parent.prototype._getRules.call(this);
-        for(i=0,l=rules.length;i<l;i++)
+        for(i=0,l=rules.length;i<l;i++) {
+            var chk = rules[i][1].parameters.has('__intersection');
+            // NOTE: Parent.prototype._getRules must copy rule arrays
+            // of collections of which the rules are going to be reused!
+            // FIXME: is is better do always create a copy here?
+            // that would spare that test in Parent.prototype._getRules
+            // rules[i] = [namespace.multiply(rules[i][0]), rules[i][1]]
             rules[i][0] = namespace.multiply(rules[i][0]);
+        }
         return rules;
     };
 

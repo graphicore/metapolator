@@ -7,11 +7,11 @@ define([
   , window
 ) {
     "use strict";
-    
+
     var CPSParserError = errors.CPSParser
       , CPSError = errors.CPS
       ;
-    
+
     function RedPill(io, fsEvents, project, angularApp, loadTextEditor) {
         this.angularApp = angularApp
         this.frontend = undefined;
@@ -24,24 +24,24 @@ define([
         this._cache = {
             lastSelection: []
         }
-        
+
         // load all masters, because right now it is very confusing
         // when some masters are missing from the MOM
         this.project.masters.forEach(this.project.open, this.project);
-        
-        
+
+
         // will be called on angular.bootstrap
-        // see ui/app-controller.js 
+        // see ui/app-controller.js
         this.angularApp.constant('registerFrontend', this._registerFrontend.bind(this))
         this.angularApp.constant('redPillModel', this.model);
         this.angularApp.constant('selectGlyphs', this.selectGlyphs.bind(this));
         this.angularApp.constant('ModelController', this.project.controller);
         this.angularApp.constant('io', io);
         this.angularApp.constant('config', {loadTextEditor: loadTextEditor})
-        
+
         this.fsEvents.on('change', this.fileChangeHandler.bind(this));
     }
-    
+
     var _p = RedPill.prototype;
 
     _p._registerFrontend = function(appController) {
@@ -50,7 +50,7 @@ define([
                            +' Don\'t use <red-pill> more than once in a template!')
         this.frontend = appController;
     }
-    
+
     _p._selectGlyphs = function(selector) {
         try {
             return this.project.controller.queryAll(selector)
@@ -63,7 +63,7 @@ define([
         }
         return false;
     }
-    
+
     _p.selectGlyphs = function(selector) {
         var result = this._selectGlyphs(selector);
         if(!result)
@@ -71,7 +71,7 @@ define([
         this._cache.lastSelection = result;
         return result;
     }
-    
+
     _p.fileChangeHandler = function (path) {
         var match = path.indexOf(this.project.cpsDir)
           , sourceName
@@ -94,6 +94,6 @@ define([
                 throw error;
         }
     };
-    
+
     return RedPill;
 })

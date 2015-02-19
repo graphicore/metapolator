@@ -421,7 +421,6 @@ define([
             Array.prototype.push.apply(
                 items, makeCPSPointRules(penStrokeData[i], i, penStrokeData.length));
 
-
         return new AtNamespaceCollection(name, selectorList, items);
     }
 

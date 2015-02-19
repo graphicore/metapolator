@@ -53,7 +53,7 @@ define([
                 return this['__GenericAST__'](node, source);
             resource = args[0].data.slice(1,-1);
 
-            atImportCollection = new AtImportCollection(ruleController);
+            atImportCollection = new AtImportCollection(ruleController, source, node.lineNo);
             atImportCollection.setResource(false, resource);
             // TODO: we can set up the parser easier for asynchronisity,
             // since the AtImportCollection now handles receiving the

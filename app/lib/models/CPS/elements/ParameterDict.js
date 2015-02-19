@@ -127,12 +127,13 @@ define([
         // searching backwards, because the last item with key === name has
         // the highest precedence
         for(i=items.length-1;i>=0;i--) {
+            item = items[i];
             key = item.name;
 
             if(!indexes[key]) indexes[key] = [];
             indexes[key].push(i);
 
-            if(!_filterParameters(item = items[i]))
+            if(!_filterParameters(item))
                 continue;
             if(!(key in dict)) {
                 dict[key] = i;

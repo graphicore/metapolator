@@ -3,8 +3,8 @@ define([
   , './whitelistProxies'
   , 'metapolator/memoize'
   , 'metapolator/models/emitterMixin'
-  , 'metapolator/models/MOM/_MOMNode'
-  , 'metapolator/models/CPS/SelectorList'
+  , 'metapolator/models/MOM/_Node'
+  , 'metapolator/models/CPS/elements/SelectorList'
 ], function(
     errors
   , whitelistProxies
@@ -44,8 +44,12 @@ define([
 
     /**
      * StyleDict is an interface to a List of CPS.Rule elements.
+     *
+     * rules: StyleDict will pull the rules for element from controller
+     *        when needed, it uses controller.getRulesForElement(element)
+     *        controller, in turn will invalidate the rules via: StyleDict.prototype.invalidateRules
      */
-    function StyleDict(controller, rules, element) {
+    function StyleDict(controller, element, rules /* default: null */) {
         // I prefer: this.get.bind(this);
         // But this method is called a lot and thus the closure is faster.
         // see: http://jsperf.com/bind-vs-native-bind-run
@@ -60,9 +64,10 @@ define([
                 self._subscribeTo(self, key);
                 return result;
             }
-          , query: function(node, selector){
+          , query: function(node, selector) {
                 var result = node.query(selector);
-                self._subscribeTo(self, selector);
+                self._subscribeTo(node, selector);
+                return result;
             }
           , genericGetter: function(item, key){
                 return self._genericGetter(item, key);
@@ -70,7 +75,7 @@ define([
         };
 
 
-        Object.define(this, 'element', {
+        Object.defineProperty(this, 'element', {
             value: element
           , enumerable: true
         });
@@ -81,7 +86,7 @@ define([
           , current: null
         };
 
-        this._rules = rules;
+        this._rules = rules || null;
         this._dict = null;
         this._cache = Object.create(null);
 
@@ -126,6 +131,7 @@ define([
 
         this._subscriptionUidCounter = 0;
         this._subscriptionUids = new WeakMap();
+        this._invalidating = 0;
     }
 
     var _p = StyleDict.prototype;
@@ -164,9 +170,78 @@ define([
         return uid;
     };
 
+    _p._unsubscribeFromAll = function(key) {
+        // we have probably collected dependencies for this cache, since
+        // the cache is now invalidated, the dependencies can be unsubscribed
+        var dependencies = this._cacheDependencies[key]
+          , subscriptionUid
+          , subscription
+          , i, l
+          ;
+        if(!dependencies)
+            return;
+        for(i=0,l=dependencies.length;i<l;i++) {
+            subscriptionUid = dependencies[i];
+            subscription = this._cacheSubscriptions[subscriptionUid];
+            // remove dependency key from subscription
+            delete subscription[2][key];//index
+            subscription[3]--;//counter
+            if(subscription[3])
+                continue;
+            // no deps left
+            subscription[0].offPropertyChange(subscription[1]);
+            delete this._cacheSubscriptions[subscriptionUid];
+        }
+        delete this._cacheDependencies[key];
+    };
+
+    /**
+     *  if key is in cache, invalidate the cache and inform all subscribers/dependants
+     */
+    _p._invalidateCache = function(key) {
+        // FIXME: _p.get should not be called while this is running!
+        // remove this check if everything behaves right.
+
+        if(!(key in this._cache)) {
+            // Because the key is not cached, there must not be any dependency or dependant
+            assert(!this._cacheDependencies[key] || !this._cacheDependencies[key].length
+                , 'Because the key is not cached, there must not be any dependency or dependant');
+            // FIXME: this should be the concern of the channel: PropertyChange
+            // it certainly is wrong in here... remove without replacement when everything works
+            // fine.
+            assert(!this._dependants[key] || !this._dependants[key].length
+                , 'Because the key is not cached, there must not be any dependency or dependant');
+            return;
+        }
+        if(!this._invalidatingKeys)
+            this._invalidatingKeys = Object.create(null);
+        assert(!(key in this._invalidatingKeys), 'Key ' + key + 'is beeing invalidated at the moment: '+ Object.keys(this._invalidatingKeys));
+        this._invalidatingKeys[key] = true;
+
+
+        this._invalidating +=1;
+        delete this._cache[key];
+        this._unsubscribeFromAll(key);
+        this._triggerPropertyChange(key);
+        this._invalidating -= 1;
+        delete this._invalidatingKeys[key];
+        assert(!(key in this._cache), '"'+key + '" was just deleted, '
+                    + 'yet it is still there: ' + Object.keys(this._cache));
+    };
+
+    _p._invalidateCacheHandler = function(subscriptionUid) {
+        assert(subscriptionUid in this._cacheSubscriptions, 'must be subscribed now');
+        var dependencies = Object.keys(this._cacheSubscriptions[subscriptionUid][2])
+          , i, l
+          ;
+        for(i=0,l=dependencies.length;i<l;i++)
+            this._invalidateCache(dependencies[i]);
+        assert(!(subscriptionUid in this._cacheSubscriptions), 'must NOT be subscribed anymore');
+    };
+
     _p._subscribeTo = function(item, key) {
         var subscriberId
-          , subscriptionUid = this._getSubscriptionUID(item, key)
+          , subscriptionUid = this._getSubscriptionUid(item, key)
           , current = this._getting.current
           , dependencies = this._cacheSubscriptions[subscriptionUid]
           ;
@@ -175,13 +250,22 @@ define([
             if(key instanceof SelectorList) {
                 // TODO: this can be controlled finer. But at the moment
                 // we don't do MOM tree changes anyways.
-                assert(item instanceof _MOMNode, 'When "key" is a Selector "item" must be a MOM Element.');
-                subscriberId = item.onSubtreeChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
-
-                TODO: make _MOMNode.onSubtreeChange
-                      and any *.cps_proxy.onPropertyChange
+                assert(item instanceof _MOMNode, 'When "key" is a Selector '
+                        +'"item" must be a MOM Element.');
+//                subscriberId = item.onSubtreeChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
+//                TODO: make _MOMNode.onSubtreeChange
+//                      and any *.cps_proxy.onPropertyChange
+                // FIXME: we don't do this currently
+                return;
+            }
+            else if(typeof item.onPropertyChange !== 'function') {
+                // NOTE, when the value at item[key] can change, that
+                // onPropertyChange and offPropertyChange must be implemented
+                // when item is "immutable", we don't need this
+                return;
             }
             else {
+
                 subscriberId = item.onPropertyChange(key, [this, '_invalidateCacheHandler'], subscriptionUid);
             }
             dependencies = this._cacheSubscriptions[subscriptionUid]
@@ -198,41 +282,6 @@ define([
         this._cacheDependencies[current].push(subscriptionUid);
     };
 
-    _p._invalidateCacheHandler = function(subscriptionUid) {
-        assert(subscriptionUid in this._cacheSubscriptions, 'must be subscribed now');
-        var dependencies = Object.keys(this._cacheSubscriptions[subscriptionUid][2])
-          , i, l
-          ;
-        for(i=0,l=dependencies.length;i<l;i++)
-            this._invalidateCache(dependencies[i]);
-        assert(!(subscriptionUid in this._cacheSubscriptions), 'must NOT be subscribed anymore');
-    };
-
-    _p._unsubscribeFromAll = function(key) {
-        // we have probably collected dependencies for this cache, since
-        // the cache is now invalidated, the dependencies can be unsubscribed
-        var dependencies = this._cacheDependencies[key]
-          , subscriptionUid
-          , subscription
-          , i, l
-          ;
-        if(!dependencies)
-            return;
-        for(i=0,l=dependencies.length-1;i<l;i++) {
-            subscriptionUid = dependencies[i];
-            subscription = this._cacheSubscriptions[subscriptionUid];
-            // remove dependency key from subscription
-            delete subscription[2][key];//index
-            subscription[3] -= 1;//counter
-            if(subscription[3])
-                continue;
-            // no deps left
-            subscription[0].offPropertyChange(subscription[1]);
-            delete this._cacheSubscriptions[subscriptionUid];
-        }
-        delete this._cacheDependencies[key];
-    };
-
     _p._genericGetter = function (item, key) {
         var result;
         if(item === undefined) {
@@ -241,6 +290,7 @@ define([
             // is this happening at ALL?
             // in which case?
             // is that case legit?
+            // console.trace();
             throw new Error('trying to read "'+key+'" from an undefined item');
             // also see cpsGetters.whitelist for a similar case
         }
@@ -284,6 +334,9 @@ define([
 
     _p._buildIndex = function() {
         var i, l, j, ll, keys, key, parameters, subscriberID;
+        if(this._rules === null)
+            // lazy rule getting, this call is most expensive
+            this._rules = this._controller.getRulesForElement(this.element);
         this._dict = Object.create(null);
         for(i=0,l=this._rules.length;i<l;i++) {
             parameters = this._rules[i].parameters;
@@ -299,9 +352,21 @@ define([
         }
     };
 
+    _p._unsubscribeFromDicts = function(){
+        var i, l, subscription;
+        for(i=0,l=this._dictSubscriptions.length;i<l;i++) {
+            subscription = this._dictSubscriptions[i];
+
+            // Uncaught UnhandledError: EmitterError:
+            // Unsubscription without subscription from channel:
+            //                  "add" with subscriberID: "1"
+            subscription[0].off(subscription[1]);
+        }
+        this._dictSubscriptions = [];
+    };
    /**
      * This method is called when the ParameterCollection of this styleDict
-     * changed so much that the this._items (rules) list needs to be rebuild
+     * changed so much that the this._rules (rules) list needs to be rebuild
      *
      * Changes in the ParameterCollection that are of this kind are:
      * added or removed Rules
@@ -313,16 +378,27 @@ define([
      *
      * This doesn't include add/remove events of parameters/parameterDicts,
      * we'll handle that on another level.
+     *
+     * not used at the moment
      */
     _p.setRules = function(rules) {
-        var i, l, subscription;
         this._rules = rules;
-
-        for(i=0,l=this._dictSubscriptions.length;i<l;i++) {
-            subscription = this._dictSubscriptions[i];
-            subscription[0].off(subscription[1]);
-        }
+        this._unsubscribeFromDicts();
         this._rebuildIndex();
+    };
+
+    _p.invalidateRules = function() {
+        this._rules = null;
+        this._unsubscribeFromDicts();
+        // note: copypasta from _p._rebuildIndex
+        // which is unused at the moment
+        var key;
+        for(key in this._dict) {
+            this._unsetDictValue(key);
+            this._invalidateCache(key);
+        }
+        // this is needed to trigger _buildIndex when it is time:
+        this._dict = null;
     };
 
     _p._rebuildIndex = function() {
@@ -412,30 +488,12 @@ define([
         }
     };
 
-    /**
-     *  if key is in cache, invalidate the cache and inform all subscribers/dependants
-     */
-    _p._invalidateCache = function(key) {
-        // FIXME: _p.get should not be called while this is running!
-        // remove this check if everything behaves right.
-        this._invalidating = true;
-
-        if(!(key in this._cache)) {
-            // Because the key is not cached, there must not be any dependency or dependant
-            assert(!this._cacheDependencies[key] || !this._cacheDependencies[key].length
-                , 'Because the key is not cached, there must not be any dependency or dependant');
-            // FIXME: this should be the concern of the channel: PropertyChange
-            // it certainly is wrong in here... remove without replacement when everything works
-            // fine.
-            assert(!this._dependants[key] || !this._dependants[key].length
-                , 'Because the key is not cached, there must not be any dependency or dependant');
-            return;
+    Object.defineProperty(_p, 'keys', {
+        get: function() {
+            if(!this._dict) this._buildIndex();
+            return Object.keys(this._dict);
         }
-        delete this._cache[key];
-        this._unsubscribeFromAll(key);
-        this._triggerPropertyChange(key);
-        this._invalidating = false;
-    };
+    });
 
     /**
      * Get a cps ParameterValue from the _rules
@@ -493,18 +551,20 @@ define([
      * any reachable element.
      */
     _p._get = function(key) {
-        var errors = [];
+        var errors = [], getting;
         if(key === 'this')
             return this.element;
 
+        getting = this._getting;
         // Detect recursion on this.element
-        if(key in this._getting.recursionDetection)
+        if(key in getting.recursionDetection)
             throw new CPSRecursionError('Looking up "' + key
                             + '" is causing recursion in the element: '
                             + this.element.particulars);
-        this._getting.recursionDetection[key] = true;
-        this._getting.stack.push(this._getting.current);
-        this._getting.current = key;
+
+        getting.recursionDetection[key] = true;
+        getting.stack.push(getting.current);
+        getting.current = key;
         try {
             return this.__get(key, errors);
         }
@@ -515,8 +575,8 @@ define([
             throw new KeyError(errors.join('\n----\n'));
         }
         finally {
-            delete this._getting.recursionDetection[key];
-            this._getting.current = this._gettingStack.pop();
+            delete getting.recursionDetection[key];
+            getting.current = getting.stack.pop();
         }
     };
     // FIXME: memoize seems to be slower, can we fix it?
@@ -525,8 +585,7 @@ define([
         // FIXME: remove this if everything behaves right
         // this error should never occur...
         if(this._invalidating)
-            throw new Error('this is invalidating, so get is illegal');
-
+            throw new Error('this is invalidating, so get is illegal: ' + this.element.type + ' ' + this.element.nodeID);
         var val = this._cache[key];
         if(val === undefined)
             this._cache[key] = val = this._get(key);

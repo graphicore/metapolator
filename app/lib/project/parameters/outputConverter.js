@@ -2,7 +2,6 @@ define([
     'metapolator/errors'
   , 'metapolator/models/CPS/parsing/Source'
   , 'metapolator/models/CPS/elements/ParameterCollection'
-  , 'metapolator/models/CPS/elements/AtRuleCollection'
   , 'metapolator/models/CPS/elements/AtRuleName'
   , 'metapolator/models/CPS/elements/Rule'
   , 'metapolator/models/CPS/elements/ParameterDict'
@@ -15,7 +14,6 @@ define([
     errors
   , Source
   , ParameterCollection
-  , AtRuleCollection
   , AtRuleName
   , Rule
   , ParameterDict
@@ -102,18 +100,12 @@ define([
           , source
         )
         // @dict
-      , new AtRuleCollection(
-            new AtRuleName('dictionary', [])
-          , [
-                new Rule(
-                    parseSelectorList.fromString('point>*', source.name)
-                  , parameterDictFromObject({
-                        pointBefore: 'parent:parent:children[parent:index - 1][this:type]'
-                      , pointAfter: 'parent:parent:children[parent:index+1][this:type]'
-                    })
-                  , source
-                )
-            ]
+      , new Rule(
+            parseSelectorList.fromString('point>*', source.name)
+          , parameterDictFromObject({
+                pointBefore: 'parent:parent:children[parent:index - 1][this:type]'
+              , pointAfter: 'parent:parent:children[parent:index+1][this:type]'
+            })
           , source
         )
       , new Rule(
