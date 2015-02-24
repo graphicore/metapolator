@@ -2,9 +2,12 @@ define([
     'metapolator/errors'
   , 'metapolator/webAPI/window'
   , 'codemirror/lib/codemirror'
+  , 'metapolator/ui/services/GlyphRendererAPI'
 ], function(
     errors
   , window
+  , codemirror
+  , GlyphRendererAPI
 ) {
     "use strict";
 
@@ -38,6 +41,8 @@ define([
         this.angularApp.constant('ModelController', this.project.controller);
         this.angularApp.constant('io', io);
         this.angularApp.constant('config', {loadTextEditor: loadTextEditor})
+
+        this.angularApp.constant('glyphRendererAPI', new GlyphRendererAPI(window.document, this.project.controller));
 
         this.fsEvents.on('change', this.fileChangeHandler.bind(this));
     }
