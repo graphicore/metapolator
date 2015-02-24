@@ -202,8 +202,6 @@ define([
                 // becuase the important cache is the plain ParameterCollection
                 // that contains the @namespace ...
                 copyRules = (item.name === 'import');
-                if(!childRules)
-                    console.log('no rules from:', item.name, item.constructor.name);
                 for(j=0,ll=childRules.length;j<ll;j++) {
                     rule = childRules[j];
                     // add `this` to the third entry to produce a history
@@ -280,6 +278,10 @@ define([
         // docs for Array.prototype.slice
         this.trigger(events);
     };
+
+    _p.getItem = function(index) {
+        return this.items[index];
+    }
 
     return ParameterCollection;
 });
