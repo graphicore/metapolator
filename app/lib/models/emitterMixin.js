@@ -13,7 +13,7 @@ define([
      *     stateProperty: '_channel'
      *   , onAPI: 'on'
      *   , offAPI: 'off'
-     *   , triggerAPI: 'trigger'
+     *   , triggerAPI: '_trigger'
      * };
      *
      * function Emitter() {
@@ -90,20 +90,31 @@ define([
      *  }
      * ```
      */
-    function emitterMixin(host, setup) {
-        var stateProperty = setup && setup.stateProperty || '_channel'
+    function emitterMixin(host, _setup) {
+        var setup = _setup || {}
+          , stateProperty = setup && setup.stateProperty || '_channel'
           , onAPI = setup && setup.onAPI || 'on'
           , offAPI = setup && setup.offAPI || 'off'
-          , triggerAPI = setup && setup.triggerAPI || 'trigger'
+          , triggerAPI = setup && setup.triggerAPI || '_trigger'
           ;
-
+        if(host.hasOwnProperty(onAPI))
+            throw new EmitterError('The property name "' + onAPI
+                    + '" is already used by this host object (' + host.constructor.name + ').');
         host[onAPI] = _mixinOn(stateProperty);
+        if(host.hasOwnProperty(offAPI))
+            throw new EmitterError('The property name "' + offAPI
+                    + '" is already used by this host object (' + host.constructor.name + ').');
         host[offAPI] = _mixinOff(stateProperty);
+        if(host.hasOwnProperty(triggerAPI))
+            throw new EmitterError('The property name "' + triggerAPI
+                    + '" is already used by this host object (' + host.constructor.name + ').');
         host[triggerAPI] = _mixinTrigger(stateProperty);
     }
 
-    function init(thisVal, setup) {
-        var stateProperty = setup.stateProperty || '_channel';
+    function init(thisVal, _setup) {
+        var setup = _setup || {}
+          , stateProperty = setup.stateProperty || '_channel'
+          ;
         if(thisVal.hasOwnProperty(stateProperty))
             throw new EmitterError('The property name "' + stateProperty
                     + '" is already used by this object (' + thisVal.constructor.name + ': ' + thisVal+').');
