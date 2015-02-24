@@ -12,17 +12,21 @@ define([
     /**
      * This Element is the container of all contours of a glyph.
      * It will have some metadata and contain children of type MOM _Contour.
-     * 
+     *
      * Possible candiates for other children would be everything else
      * found in a UFO-Glyph. But, we can make properties about that stuff,
      * too. Guidelines would make a good candidate for further children,
      * because we might actually want to access these via CPS.
-     * 
+     *
      * In the first version we the only child of MOM _Contour is
      * MOM PenStroke.
      */
     function Glyph() {
         Parent.call(this);
+        // FIXME: make a GlyphData Object, similar like PointData
+        // use that for advanceWidth/advanceHeight and everything setUFOData
+        // probably, remove _p.setUFOData in favor of a common interface
+        // for all MOM elements
         this._advanceWidth  = 0;
         this._advanceHeight = 0;
         this._ufoData = {};
@@ -40,16 +44,20 @@ define([
         for(var k in source) if(!this.hasOwnProperty(k)) this[k] = source[k];
     }).call(_p._cps_whitelist, Parent.prototype._cps_whitelist);
 
-    
+    _p._cloneProperties = function(clone) {
+        Parent.prototype._cloneProperties.call(this, clone);
+        clone.setUFOData(this.getUFOData());
+    }
+
     Object.defineProperty(_p, 'MOMType', {
         value: 'MOM Glyph'
     })
-    
+
     Object.defineProperty(_p, 'type', {
         /* this is used for CPS selectors */
         value: 'glyph'
     })
-    
+
     _p.setUFOData = function(ufoGlyph) {
         var i=0, keys = Object.keys(ufoGlyph);
         for(;i<keys.length;i++)
@@ -91,13 +99,13 @@ define([
         var UFOtoCPSKeyMap = {   'width': 'advanceWidth'
                                , 'height': 'advanceHeight'
                              };
-        
-        if(UFOtoCPSKeyMap[ufokey]) 
-            return UFOtoCPSKeyMap[ufokey]; 
+
+        if(UFOtoCPSKeyMap[ufokey])
+            return UFOtoCPSKeyMap[ufokey];
         return ufokey;
     }
     Glyph.convertUFOtoCPSKey = convertUFOtoCPSKey;
     _p._acceptedChildren = [_Contour];
-    
+
     return Glyph;
 })
