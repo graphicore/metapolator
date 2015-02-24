@@ -129,9 +129,17 @@ define([
         // which is this._dependencies
         emitterMixin.init(this, propertyChangeEmitterSetup);
 
+        // adds the default this._channel
+        emitterMixin.init(this);
+
         this._subscriptionUidCounter = 0;
         this._subscriptionUids = new WeakMap();
         this._invalidating = 0;
+
+        // we can prepare this callback once for all channels
+        // see also _p._nextTrigger
+        this._delayedTriggerData = Object.create(null);
+        this.__delayedTrigger = this._delayedTrigger.bind(this);
     }
 
     var _p = StyleDict.prototype;
@@ -142,8 +150,18 @@ define([
      *    onPropertyChange(propertyName, subscriberData) // returns subscriptionId
      *    offPropertyChange(subscriptionId)
      *    _triggerPropertyChange(propertyName, eventData)
+     *
+     * these are used mostly for inter-StyleDict communication / cache invalidation
      */
     emitterMixin(_p, propertyChangeEmitterSetup);
+
+    /**
+     * adds the methods:
+     *    on(channel, subscriberData) // returns subscriptionId
+     *    off(subscriptionId)
+     *    _trigger(channel, eventData)
+     */
+    emitterMixin(_p);
 
     _p._getSubscriptionUid = function(item, key) {
         var uid;
@@ -199,8 +217,13 @@ define([
      *  if key is in cache, invalidate the cache and inform all subscribers/dependants
      */
     _p._invalidateCache = function(key) {
-        // FIXME: _p.get should not be called while this is running!
-        // remove this check if everything behaves right.
+        // FIXME:
+        // This event should fire whenever the value of the dict
+        // changed in a way, so that e.g. a redraw of a glyph is needed
+        // _invalidateCache seems resonable at the moment, but it might be
+        // a source of subtle bugs, when the event was not fired but should
+        // have been. So keep an eye on this.
+        this._nextTrigger('change', key);
 
         if(!(key in this._cache)) {
             // Because the key is not cached, there must not be any dependency or dependant
@@ -213,6 +236,7 @@ define([
                 , 'Because the key is not cached, there must not be any dependency or dependant');
             return;
         }
+        // remove this this._invalidatingKeys when there are no errors
         if(!this._invalidatingKeys)
             this._invalidatingKeys = Object.create(null);
         assert(!(key in this._invalidatingKeys), 'Key ' + key + 'is beeing invalidated at the moment: '+ Object.keys(this._invalidatingKeys));
@@ -227,6 +251,43 @@ define([
         delete this._invalidatingKeys[key];
         assert(!(key in this._cache), '"'+key + '" was just deleted, '
                     + 'yet it is still there: ' + Object.keys(this._cache));
+    };
+
+    /**
+     * Schedule an event to fire after all synchronous tasks are finished
+     * using a simple setTimeout(,0); a subsequent call to this._nextTrigger
+     * will delay the timeout again and add it's data to the scheduled data.
+     *
+     * For now this is enough debouncing, however, we may need better
+     * mechanics in the future.
+     */
+    _p._nextTrigger = function(channelKey, data) {
+        /*global setTimeout:true, clearTimeout:true*/
+        // FIXME: use https://github.com/YuzuJS/setImmediate/blob/master/setImmediate.js
+        //        instead of setTimeout, everywhere not just here!
+        var channel = this._delayedTriggerData[channelKey];
+        if(!channel)
+            channel = this._delayedTriggerData[channelKey] = {
+                timeoutID: null
+              , data: []
+            };
+        if(channel.timeoutID)
+            clearTimeout(channel.timeoutID);
+        if(arguments.length > 1)
+            channel.data.push(data);
+        channel.timeoutID = setTimeout(this.__delayedTrigger, 0, channelKey);
+    };
+
+    /**
+     * This is only ever called via _nextTrigger and the
+     * this.__delayedTrigger bound method
+     */
+    _p._delayedTrigger = function(channelKey) {
+        var channel = this._delayedTriggerData[channelKey];
+        if(!channel)
+            throw new AssertionError('The data for "'+ channelKey +'" is missing.');
+        delete this._delayedTriggerData[channelKey];
+        this._trigger(channelKey, (channel.data.length ? channel.data : undefined));
     };
 
     _p._invalidateCacheHandler = function(subscriptionUid) {
@@ -460,7 +521,6 @@ define([
     _p._updateDictEntry = function(key) {
         var i, l, parameters;
         this._unsetDictValue(key);
-        this._invalidateCache(key);
         for(i=0,l=this._rules.length;i<l;i++) {
             parameters = this._rules[i].parameters;
             if(!parameters.has(key))
@@ -468,6 +528,7 @@ define([
             this._setDictValue(parameters, key, i);
             break;
         }
+        this._invalidateCache(key);
     };
 
     _p._paramerChangeHandler = function(parameters, key, eventData) {
@@ -582,10 +643,8 @@ define([
     // FIXME: memoize seems to be slower, can we fix it?
     //_p.get = memoize('get', _p._get);
     _p.get = function(key) {
-        // FIXME: remove this if everything behaves right
-        // this error should never occur...
         if(this._invalidating)
-            throw new Error('this is invalidating, so get is illegal: ' + this.element.type + ' ' + this.element.nodeID);
+            throw new AssertionError('This is invalidating, so get is illegal: ' + this.element.type + ' ' + this.element.nodeID);
         var val = this._cache[key];
         if(val === undefined)
             this._cache[key] = val = this._get(key);
