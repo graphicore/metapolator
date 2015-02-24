@@ -88,10 +88,8 @@ define([
         var rules, i, l
           , namespace = this.selectorList
           ;
-        if(namespace.invalid) {
-            console.log('invalid namespace: '+namespace);
+        if(namespace.invalid)
             return [];
-        }
         rules = Parent.prototype._getRules.call(this);
         for(i=0,l=rules.length;i<l;i++) {
             var chk = rules[i][1].parameters.has('__intersection');
