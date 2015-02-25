@@ -271,10 +271,17 @@ define([
                 timeoutID: null
               , data: []
             };
-        if(channel.timeoutID)
-            clearTimeout(channel.timeoutID);
         if(arguments.length > 1)
             channel.data.push(data);
+        if(channel.timeoutID)
+            return;
+            // all _nextTrigger calls will hapen during one synchronous process
+            // so there's no need to clearTimeout
+            // FIXME: TODO: in the future there may be asynchronisity introduced
+            // via the renderer. Then we should switch to a promise that triggers
+            // when it's done (using the "then" interface of the promise)
+            // clearTimeout(channel.timeoutID);
+
         channel.timeoutID = setTimeout(this.__delayedTrigger, 0, channelKey);
     };
 

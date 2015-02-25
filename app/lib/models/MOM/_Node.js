@@ -344,10 +344,15 @@ define([
         // StyleDict debouncing to here then also changes of this item's
         // children will be held back (but they do the same, so a propper
         // waiting time for 10 ms in the subscriber is maybe best)
-        if(this._cpsChange.timeoutId)
-            clearTimeout(this._cpsChange.timeoutId);
         if(eventData)
             this._cpsChange.eventData.push(eventData);
+        if(this._cpsChange.timeoutId)
+            return;
+            // Now an event is scheduled, so there's no need for a further
+            // action. In the future, we may pass a promise around to trigger
+            // when the current task has finished. Similar considerations
+            // are in StyleDict.js at Styledict.prototype._nextTrigger
+            //clearTimeout(this._cpsChange.timeoutId);
         this._cpsChange.timeoutId = setTimeout(this._cpsChange.trigger, 0);
     };
 
