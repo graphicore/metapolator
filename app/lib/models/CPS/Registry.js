@@ -3,11 +3,13 @@ define([
   , './dataTypes/CPSReal'
   , './dataTypes/CPSVector'
   , './dataTypes/CPSTransformation'
+  , './dataTypes/CPSDictionaryEntry'
 ], function(
     errors
   , CPSReal
   , CPSVector
   , CPSTransformation
+  , CPSDictionaryEntry
 ) {
     "use strict";
     /**
@@ -28,6 +30,7 @@ define([
             real: CPSReal.factory
           , vector: CPSVector.factory
           , transformation: CPSTransformation.factory
+          , generic: CPSDictionaryEntry.factory
         };
     }
     var _p = Registry.prototype;// = Object.create(Parent.prototype)
@@ -38,20 +41,21 @@ define([
         return name in this._parameters;
     }
 
-    _p.getTypeDefinition = function(name) {
-        var description;
-        if(!this.exists(name))
+    _p.getFactory = function(name, fallbackType /* optional string, default: 'generic'*/) {
+        var description, type
+          , _fallbackType = fallbackType === undefined ? 'generic' : fallbackType;
+          ;
+        if(this.exists(name))
+            type = this._parameters[name].type;
+        else if(_fallbackType) {
+            if(!(_fallbackType in this._dataTypes))
+                throw new errors.CPSRegistryKey('Name "' + name + '" is no registered '
+                        + 'parameter and fallback-type "' + _fallbackType + '" is no known type');
+            type = _fallbackType;
+        }
+        else
             throw new errors.CPSRegistryKey('Name "' + name + '" is no registered parameter');
-        description = this._parameters[name];
-        return this._dataTypes[description.type];
-    }
-
-    _p.getDefaultFactory = function(name) {
-        var description;
-        if(!this.exists(name))
-            throw new errors.CPSRegistryKey('Name "' + name + '" is no registered parameter');
-        description = this._parameters[name];
-        return this._dataTypes[description.type].defaultFactory;
+         return this._dataTypes[type];
     }
 
     _p.register = function(name, parameterDescription) {

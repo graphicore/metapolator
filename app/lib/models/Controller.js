@@ -70,6 +70,11 @@ define([
         return this._masters[master];
     };
 
+    _p.getMasterCPS = function(async, master) {
+        var ruleName = this._getMasterRule(master);
+        return this._ruleController.getRule(async, ruleName);
+    }
+
     /**
      * Used from within _getComputedStyle and StyleDict, don't use it
      * anywhere else! This is not cached here and pretty expensive.

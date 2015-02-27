@@ -55,8 +55,8 @@ if (require.main === module) {
             // thus path/to/metapolator-code is the root directory
             var rootDir = path.dirname(path.dirname(require.main.filename))
               , libDir = rootDir + '/app/lib'
-              , homeDir = rootDir + '/app'
-              , index = homeDir + '/red-pill.html'
+              , htmlDir = rootDir + '/app/lib/html'
+              , index = htmlDir + '/red-pill.html'
               , project = parseArgs.project(io, projectDir)
               , app = express()
               , server = app.listen(getPort(program))
@@ -66,10 +66,11 @@ if (require.main === module) {
                // any .html file
                .get('/*.html', function(req, res, next) {
                     var i = req.path.lastIndexOf('/');
-                    if(i === -1) {
+                    if(i === -1){
                         next();
+                        return;
                     }
-                    res.sendfile(homeDir + req.path.slice(i));
+                    res.sendfile(htmlDir + req.path.slice(i));
                })
                .use('/lib', express.static(libDir)) // application code
                ;

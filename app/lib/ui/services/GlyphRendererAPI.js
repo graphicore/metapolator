@@ -136,6 +136,7 @@ define([
         matrix = [1, 0, 0, -1, 0, moveUp];
         data.svg.setAttribute('transform', 'matrix(' + matrix.join(',') +')');
         data.svg.appendChild(path);
+
         // update all viewboxes
         this._setSVGViewBox(data);
     };
@@ -209,6 +210,21 @@ define([
         for(i=0,l=svgs.length;i<l;i++) {
             if(svgs[i].parentElement);
             svgs[i].setAttribute('viewBox', viewBox);
+            // FIXME: file a bug for chromiuim:
+            // For some silly reason this is not always enough for chrome
+            // to resize the svg element :-/ especially when the viewbox
+            // is getting smaller than some magic amount, chrome sometimes
+            // just stops synchronizing the real svg width.
+            // This triggers the width update, however, it takes away the
+            // possibility to change "display" via CSS
+            // svgs[i].setAttribute('width', 0);
+            // NOTE: this is also not needed with firefox
+            // Filed a bug:
+            // https://code.google.com/p/chromium/issues/detail?id=462107
+            svgs[i].style.display = svgs[i].style.display === 'inline-block'
+                   ? 'inline'
+                   : 'inline-block'
+                   ;
         }
     };
 
@@ -226,17 +242,13 @@ define([
         else if(type && type !== 'svg')
             throw new ValueError('Type must be "use" or "svg" or undefinded: ' + type);
         svg = this._doc.createElementNS(svgns, 'svg');
-        // FIXME: most probably the gui wants to control the height via css
-        // to emulate line height
-        svg.setAttribute('height', '100px');
-        // this can be set via css as well, but since it is the only
+        // This can be set via css as well, but since it is the only
         // choice that really makes sense, we may be happy for ever when
         // setting it here
         svg.setAttribute('overflow', 'visible');
         this._setSVGViewBox(data, svg);
         data.svgInstances.push(svg);
         svg.appendChild(use);
-
         return svg;
     };
 
