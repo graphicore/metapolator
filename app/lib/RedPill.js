@@ -1,10 +1,15 @@
 define([
     'metapolator/errors'
   , 'metapolator/webAPI/window'
+  , 'metapolator/webAPI/document'
+  , 'metapolator/ui/services/GlyphRendererAPI'
   , 'codemirror/lib/codemirror'
 ], function(
     errors
   , window
+  , document
+  , GlyphRendererAPI
+  , _
 ) {
     "use strict";
 
@@ -18,6 +23,10 @@ define([
         this.project = project;
         this.fsEvents = fsEvents;
         this.loadTextEditor = loadTextEditor;
+        this.glyphRendererAPI = new GlyphRendererAPI(document, this.project.controller,
+            {noParentSizing: true}
+        );
+
         this.model = {
             masters: this.project.masters
         };
@@ -36,6 +45,7 @@ define([
         this.angularApp.constant('redPillModel', this.model);
         this.angularApp.constant('selectGlyphs', this.selectGlyphs.bind(this));
         this.angularApp.constant('ModelController', this.project.controller);
+        this.angularApp.constant('glyphRendererAPI', this.glyphRendererAPI);
         this.angularApp.constant('io', io);
         this.angularApp.constant('config', {loadTextEditor: loadTextEditor});
 
@@ -82,9 +92,7 @@ define([
         sourceName = path.slice(this.project.cpsDir.length + 1);
         try {
             this.project.controller.updateChangedRule(true, sourceName)
-                .then(function() {
-                    this.frontend.$scope.$broadcast('cpsUpdate');
-                }.bind(this), errors.unhandledPromise);
+                .then(undefined, errors.unhandledPromise);
         }
         catch(error) {
             // KeyError will be thrown by RuleController.replaceRule if
