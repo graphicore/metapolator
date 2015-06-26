@@ -40,8 +40,19 @@ That means:
     everything ordered.
 
 
+A general feeling that I have with the models is that they are too concretely
+tied to actual user interface elements. There should be some abstraction to it.
+I think concrete user interface state (if we really want that) could even
+be stored using a very generic key-value model, with simple validations and
+all ui-users of this would gracefully fallback to a default state, if there
+is no applciable state for them.
+
 
 TODO: take the chance and update to Angular 1.4.x
+
+I notice that all the code is now niceley spread over many files. But the
+state is not encapsulated at all. It is like spaghetti code but it doesn't
+look like that.
 
 
 

@@ -8,10 +8,14 @@ define([
   , AxisModel
 ){
     "use strict";
-    function InstanceModel(id, name, displayName, axes, designSpace, color, parent) {
+    function InstanceModel(id, name, displayNamedisplayName, axes, designSpace, color, parent) {
         this.id = id;
         this.name = name;
+        // probably we should not have this reference here.
+        // it's  better to have just one place for these things. Too
+        // many references make bookeeping just harder.
         this.displayName = displayName;
+        // what axes are is underspecified
         this.axes = axes;
         this.children = [];
         this.edit = [false, false];
@@ -21,19 +25,19 @@ define([
         this.exportFont = true;
         this.openTypeFeatures = true;
         this.updateMetapolationValues();
-        
+
         Object.defineProperty(this, 'parent', {
             value: parent,
             enumerable: false,
             writable: true,
             configurable: true
         });
-        
+
         this.addInitialGlyphs();
     }
-    
+
     var _p = InstanceModel.prototype = Object.create(Parent.prototype);
-    
+
     _p.addInitialGlyphs = function() {
         var glyphs = this.parent.parent.parent.glyphs;
         for (var i = glyphs.length - 1; i >= 0; i--) {
@@ -41,7 +45,7 @@ define([
             this.addGlyph(glyphName);
         }
     };
-    
+
     _p.updateMetapolationValues = function () {
         window.logCall("updateMetapolationValues");
         var axes = this.axes;
@@ -59,25 +63,25 @@ define([
             for (var i = n; i >= 0; i--) {
                 var thisPiece = parseFloat(axes[i].axisValue);
                 axes[i].metapolationValue = thisPiece / cake;
-            }   
+            }
         }
     };
-    
+
     _p.addGlyph = function (name) {
         window.logCall("addGlyph");
         this.children.push(
             new GlyphModel(name, this.name, this)
         );
     };
-   
+
     _p.addAxis = function(master, axisValue, metapolationValue) {
         window.logCall("addAxis");
         this.axes.push(
             new AxisModel(master, axisValue, metapolationValue)
-        ); 
-        this.updateMetapolationValues();   
+        );
+        this.updateMetapolationValues();
     };
-    
+
     _p.reDestributeAxes = function(slack) {
         // this functin is called after a change of slack master
         var axes = this.axes
@@ -99,11 +103,11 @@ define([
             axes[i].axisValue = this.formatAxisValue(ratio * axes[i].axisValue);
         }
     };
-    
+
     _p.formatAxisValue = function(x) {
         var rounded = Math.round(x * 10) / 10;
         return rounded;
     };
-    
+
     return InstanceModel;
 });

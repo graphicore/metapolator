@@ -3,6 +3,8 @@ define([
 ], function(Parent) {
     "use strict";
     function PanelModel() {
+        // this looks like default vakues.
+
         this.menuItems = ["Form", "Mix", "Export"];
         this.viewState = 0;
         this.panels = [{
@@ -102,4 +104,4 @@ define([
     var _p = PanelModel.prototype = Object.create(Parent.prototype);
 
     return PanelModel;
-}); 
+});
