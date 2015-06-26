@@ -54,6 +54,21 @@ I notice that all the code is now niceley spread over many files. But the
 state is not encapsulated at all. It is like spaghetti code but it doesn't
 look like that.
 
+The way out of this is a) to structure the model the way the data needs to be
+structured b) adopt the interface widgets to display well interfaces for the
+model states. There should be no tightly coupled model for an interface widget.
+Rather the other way around. Names like "DesignSpaceModel" or "PanelModel"\
+are strong indicators for developing it the wrong way: first the interface
+then the model, but that brings us in hells kitchen.
+
+next step: model the data
+then: see if we can reuse something of the current stuff
+and: make a transitioning plan
+
+"Model first" should always be the approach to development of complex software.
+
+
+
 
 
 
