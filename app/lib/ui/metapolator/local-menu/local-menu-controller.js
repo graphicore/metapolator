@@ -5,9 +5,11 @@ define([], function() {
         // which handles the click outside a lm-head button
         // to collapse an open local menu body
         this.$scope = $scope;
-        this.$scope.name = 'localMenu';
+        this.$scope.name = 'localMenu';// scope.name -> of what use is this?
+
+        // so these things are all the same, i.e. metapolatorModel.display
         this.$scope.display = this.display = metapolatorModel.display;
-        
+
         this.toggleMenu = function(name) {
             if ($scope.display.localMenu == name) {
                 // close the current menu
@@ -16,7 +18,7 @@ define([], function() {
                 $scope.display.localMenu = name;
             }
         };
-        
+
         this.closeMenu = function() {
             $scope.display.localMenu = null;
         };
@@ -26,4 +28,4 @@ define([], function() {
     var _p = LocalMenuController.prototype;
 
     return LocalMenuController;
-}); 
+});

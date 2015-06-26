@@ -6,12 +6,19 @@ define([
   , $
 ){
     "use strict";
+
+
+    // to answer this question: This is a service. Shared amongst all,
+    // must be a servcice.
+    // we should provide load it via the Metapolator top level module.
+    // this could be a nice option: to bootstrap some dialogs
+    // https://github.com/dwmkerr/angular-modal-service/blob/master/src/angular-modal-service.js
     function DialogModel() {
 
     }
-    
+
     var _p = DialogModel.prototype = Object.create(Parent.prototype);
-    
+
     _p.confirm = function(message, callback) {
         var self = this;
         self.openDialogScreen(message, false, true, false);
@@ -49,6 +56,6 @@ define([
         $("#dialog-close").hide();
         $("#dialog-confirm").hide();
     };
-    
+
     return DialogModel;
 });
