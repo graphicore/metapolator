@@ -17,20 +17,21 @@ define([
         this.selectionOperators = [];
         this.elements = elements;
         this.effectiveValue = null;
-        
+
         this.updateOperators(elements);
         this.updateEffectiveValue();
     }
 
     var _p = SelectionParameterModel.prototype = Object.create(Parent.prototype);
-    
+
+    // tl;dr
     _p.updateEffectiveValue = function() {
         window.logCall("updateEffectiveValue");
         if (this.effectiveLevel == this.level) {
             var self = this
               , low = null
               , high = null;
-              
+
             for (var i = this.elements.length - 1; i >= 0; i--) {
                 var element = this.elements[i];
                 for (var j = element.parameters.length - 1; j >= 0; j--) {
@@ -58,6 +59,7 @@ define([
         }
     };
 
+    // tl;dr
     _p.updateOperators = function(elements) {
         // based upon a (new) selection operators are attached to the selection
         var self = this;
@@ -126,7 +128,7 @@ define([
         }
         this.updateEffectiveValue();
     };
-    
+
 
 
     return SelectionParameterModel;

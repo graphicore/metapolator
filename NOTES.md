@@ -67,6 +67,23 @@ and: make a transitioning plan
 
 "Model first" should always be the approach to development of complex software.
 
+"configuration source" could be a good pattern for a lot of ui-needs. The aim
+is that a user could use a custom "configuration source" for setting up the app.
+Essentially everything that is not project-state or application state could be
+fed controlled by a config-source. The app-state would need to fallback gracefully
+if a state is no longer in the configuration (when starting fresh or when
+the config changes, the latter is not so important for the beginning, imho)
+
+
+project state:
+  - MOM+CPS+Skeletons,cps-masters
+  - UI-Master/UI-Instance-Setup/UI-Interpolation Setup
+application state:
+  - specimen panel state (which sample text is displayed, line height etc.)
+  - maybe custom configuration entered during runtime (and stored longer)?
+application configuration:
+  - which are the available specimen sample texts
+  - which are the settings for line-height (tight/loose)
 
 
 

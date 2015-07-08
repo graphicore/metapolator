@@ -6,6 +6,8 @@ define([
   , SelectionParameterModel
 ){
     "use strict";
+
+    // this is MOM/CPS interaction. need to study it.
     function SelectionModel(level, parameters, operators, sequences, allLevels, parent) {
         this.parent = parent;
         this.level = level;
@@ -17,22 +19,22 @@ define([
         // should do this with inheritiance
         this.allElements = sequences;
     }
-        
+
     var _p = SelectionModel.prototype = Object.create(Parent.prototype);
-    
+
     _p.updateThisSelection = function(parentEmpty) {
         window.logCall("updateThisSelection: " + this.level);
         if (parentEmpty) {
             this.elements = [];
             this.selectionParameters = [];
         } else {
-            this.elements = this.findSelectedElements(this.level); 
+            this.elements = this.findSelectedElements(this.level);
             if (this.elements.length > 0) {
                 this.updateParameters();
             }
         }
     };
-    
+
     _p.updateParameters = function() {
         window.logCall("updateParameters");
         var self = this;
@@ -45,7 +47,7 @@ define([
                 );
             }
         }
-        
+
         function hasThisParameter(baseParameter) {
             for (var i = self.elements.length - 1; i >= 0; i--) {
                 var element = self.elements[i];
@@ -59,7 +61,7 @@ define([
             return false;
         }
     };
-    
+
     _p.getParameterByName = function(parameterName) {
         window.logCall("getParameterByName");
         for (var i = this.selectionParameters.length - 1; i >= 0; i--) {
@@ -70,9 +72,9 @@ define([
         }
         return null;
     };
-    
-    _p.findSelectedElements = function (level) { 
-        window.logCall("findSelectedElements");  
+
+    _p.findSelectedElements = function (level) {
+        window.logCall("findSelectedElements");
         var levelElements = this.allElements;
         var thisLevel = "sequences";
         while (thisLevel != level && levelElements.length > 0) {
@@ -88,7 +90,7 @@ define([
                         tempArray.push(child);
                     }
                 }
-            }  
+            }
             levelElements = tempArray;
             if (levelElements.length > 0) {
                 thisLevel = levelElements[0].level;
@@ -97,6 +99,6 @@ define([
         return levelElements;
     };
 
-    
+
     return SelectionModel;
 });

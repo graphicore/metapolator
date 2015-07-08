@@ -7,6 +7,8 @@ define([
     function SpecimenSamplesModel(glyphRange, parent) {
         this.currentSample = null;
         this.glyphRange = glyphRange;
+        // we should rather load these examples from a configuration source
+        // one day. Then the user can use own data.
         this.samples = [[{
             name : "[Enter your own text]",
             text : "Metapolator"
@@ -29,7 +31,7 @@ define([
             name : "Paragraph",
             text : "Grumpy wizards make toxic brew for the evil Queen and Jack. One morning when Gregor Samsa woke from troubled dreams, he found himself transformed in his bed into a horrible vermin.*pHe lay on his armourlike back and if he lifted his head a little, he could see his brown belly slightly domed and divided by arches into stiff sections.*pThe bedding was hardly able to cover it and seemed ready to slide off any moment. His many legs pitifully thin compared with the size of the rest of him, waved about helplessly as he looked."
         }]];
-        
+
         Object.defineProperty(this, 'parent', {
             value: parent,
             enumerable: false,
@@ -38,15 +40,15 @@ define([
         });
     }
     var _p = SpecimenSamplesModel.prototype = Object.create(Parent.prototype);
-    
+
     _p.addGlyphRange = function () {
         var glyphRange = [{
             name : "Glyph Range"
         }];
-        this.samples.push(glyphRange);      
+        this.samples.push(glyphRange);
     };
-    
 
-    
+
+
     return SpecimenSamplesModel;
 });

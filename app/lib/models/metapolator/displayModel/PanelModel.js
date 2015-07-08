@@ -3,7 +3,7 @@ define([
 ], function(Parent) {
     "use strict";
     function PanelModel() {
-        // this looks like default vakues.
+        // this looks like default values.
 
         this.menuItems = ["Form", "Mix", "Export"];
         this.viewState = 0;

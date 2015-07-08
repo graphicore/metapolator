@@ -9,7 +9,7 @@ define([
     function SequenceModel(name, baseParameters, baseOperators, parent) {
         this.name = name;
         this.level = "sequence";
-        this.canEdit = true;
+        this.canEdit = true;// better name: editable
         this.children = [];
         this.addBaseModels(baseParameters, baseOperators);
         Object.defineProperty(this, 'parent', {
@@ -19,17 +19,17 @@ define([
             configurable: true
         });
     }
-        
+
     var _p = SequenceModel.prototype = Object.create(Parent.prototype);
-    
+
     _p.addMaster = function(name) {
         window.logCall("addMaster");
         this.children.push(
             new MasterModel(name, this.baseParameters, this.baseOperators, this, this.parent)
         );
     };
-    
 
-    
+
+
     return SequenceModel;
 });
