@@ -56,7 +56,7 @@ define([
         if(mountPointPath.normalPath in this._mounted)
             throw new IOEntryExistsError('Mount Point "' + IOEntryExistsError + '" is already in use');
 
-        pathOffsetPath = Path.Factory(pathOffset);
+        pathOffsetPath = Path.Factory(pathOffset || '');
         this._mounted[mountPointPath.normalPath] = [io, pathOffsetPath.normalPath];
         len = mountPointPath.path.length;
         byPathLen = this._mountPointsByPathLength[len];
@@ -66,6 +66,7 @@ define([
             // thus this is a collision free key
             Object.defineProperty(byPathLen, '../length', {
                 value: 0
+              , writable: true
             });
         }
         byPathLen['../length'] +=1;
@@ -213,6 +214,25 @@ define([
         );
     }
 
+    (function(target, factory, apiDefinition){
+        var k;
+        for(k in apiDefinition)
+            target[k] = factory.apply(null, apiDefinition[k]);
+    })( _p, _obtainRequestFactory, {
+        readFile: ['readFile', undefined]
+      , writeFile: ['writeFile', ['data']]
+      , appendFile: ['appendFile', ['data']]
+      , unlink: ['unlink', undefined]
+      , readBytes: ['readBytes', ['bytes']]
+      , stat: ['stat', undefined]
+      , pathExists: ['pathExists', undefined]
+      , getMtime: ['getMtime', undefined]
+      , _readDir: ['readDir', undefined]
+      , mkDir: ['mkDir', undefined]
+      , ensureDir: ['ensureDir', undefined]
+      , _rmDir: ['rmDir', undefined]
+    });
+
     // This also has to run when the original readir throws an
     // IONotDirError or IONoEntryError
     _p._augmentDirectoryListing = function(path, listing) {
@@ -270,26 +290,7 @@ define([
         }
         // sort?
         return Object.keys(setOfNames);
-    }
-
-    (function(target, factory, apiDefinition){
-        var k;
-        for(k in apiDefinition)
-            target[k] = factory(k, apiDefinition[k]);
-    })( _p, _obtainRequestFactory, {
-        readFile: undefined
-      , writeFile: ['data']
-      , appendFile: ['data']
-      , unlink: undefined
-      , readBytes: ['bytes']
-      , stat: undefined
-      , pathExists: undefined
-      , getMtime: undefined
-      , _readDir: undefined
-      , mkDir: undefined
-      , ensureDir: undefined
-      , _rmDir: undefined
-    });
+    };
 
     _p.readDir = obtain.factory(
         {
