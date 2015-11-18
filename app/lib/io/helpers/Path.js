@@ -13,8 +13,8 @@ define([
     var assert = errors.assert
       ;
 
-    function Path(pathStr) {
-        var _path;
+    function Path(pathStr_) {
+        var _path, pathsStr = pathStr || '';
         this.normalPath = path.normalize(pathStr);
         this.rawPath = pathStr;
         if(this.normalPath[0] === '/')
