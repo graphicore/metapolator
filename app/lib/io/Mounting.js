@@ -122,7 +122,7 @@ define([
           , parts = requestPath.path
           , i, l, pathLen, sub = ''
           , byPathLen
-          , dispatchPath
+          , dispatchPath = path
           , mountPoint
           ;
 
@@ -146,7 +146,8 @@ define([
             }
             // got a match!
             mountPoint = this._mounted[sub];
-            dispatchPath = parts.slice(pathLen).concat(mountPoint[1]).join('/');
+            dispatchPath = [mountPoint[1]].concat(parts.slice(pathLen)).join('/');
+
             return [mountPoint[0], dispatchPath];
         } while(i<l);
 
@@ -154,7 +155,7 @@ define([
         // NOTE: we could add a baseIO offset here an create a second handy
         // use for this module.
         // That can be done with a zero length mountPoint as well though!
-        return [this._baseIo, path];
+        return [this._baseIo, dispatchPath];
     };
 
     function _dispatch(async, dispatchTarget, funcName, args_) {

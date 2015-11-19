@@ -14,7 +14,7 @@ define([
       ;
 
     function Path(pathStr_) {
-        var _path, pathsStr = pathStr || '';
+        var _path, pathStr = pathStr_ || '';
         this.normalPath = path.normalize(pathStr);
         this.rawPath = pathStr;
         if(this.normalPath[0] === '/')
